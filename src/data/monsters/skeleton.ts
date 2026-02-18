@@ -10,6 +10,7 @@ export const skeleton: MonsterDefinition = {
     attackInterval: 1.8,
     moveSpeed: 0,
     attackRange: 150,
+    launchType: 'pierce',
   },
   aiType: 'ranged_stationary',
   deployCooldown: 2000,

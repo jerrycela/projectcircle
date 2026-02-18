@@ -11,6 +11,7 @@ export const skeletonMage: EvolutionDefinition = {
     hp: 40,
     attack: 10,
     attackInterval: 2.5,
+    launchType: 'pierce',
   },
   specialAbility: {
     type: 'aoe',

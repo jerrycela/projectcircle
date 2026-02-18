@@ -244,18 +244,20 @@ export class DataRegistry {
   private static readonly waveConfigs: readonly BattleWaveConfig[] = [
     {
       roomDistance: 1,
-      totalWaves: 2,
+      totalWaves: 3,
       waves: [
         { waveNumber: 1, entries: [{ heroId: 'adventurer', count: 2 }] },
         { waveNumber: 2, entries: [{ heroId: 'adventurer', count: 2 }] },
+        { waveNumber: 3, entries: [{ heroId: 'adventurer', count: 2 }] },
       ],
     },
     {
       roomDistance: 2,
-      totalWaves: 2,
+      totalWaves: 3,
       waves: [
-        { waveNumber: 1, entries: [{ heroId: 'adventurer', count: 3 }] },
+        { waveNumber: 1, entries: [{ heroId: 'adventurer', count: 2 }] },
         { waveNumber: 2, entries: [{ heroId: 'adventurer', count: 3 }] },
+        { waveNumber: 3, entries: [{ heroId: 'adventurer', count: 3 }] },
       ],
     },
     {

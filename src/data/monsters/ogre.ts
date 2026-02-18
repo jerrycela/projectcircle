@@ -10,6 +10,7 @@ export const ogre: MonsterDefinition = {
     attackInterval: 2.0,
     moveSpeed: 80,
     attackRange: 30,
+    launchType: 'bounce',
   },
   aiType: 'melee_tank',
   deployCooldown: 3000,

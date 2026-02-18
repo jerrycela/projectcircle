@@ -12,6 +12,7 @@ export const goblinAssassin: EvolutionDefinition = {
     attack: 18,
     attackInterval: 0.8,
     moveSpeed: 169,  // 130 * 1.3
+    launchType: 'bounce',
   },
   specialAbility: {
     type: 'speed_boost',

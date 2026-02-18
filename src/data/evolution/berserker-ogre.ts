@@ -11,6 +11,7 @@ export const berserkerOgre: EvolutionDefinition = {
     hp: 140,
     attack: 12,
     attackInterval: 1.8,
+    launchType: 'bounce',
   },
   specialAbility: {
     type: 'damage_scaling',

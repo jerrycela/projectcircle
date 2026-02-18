@@ -11,6 +11,7 @@ export const ironcladOgre: EvolutionDefinition = {
     hp: 220,
     attack: 10,
     attackInterval: 2.0,
+    launchType: 'bounce',
   },
   specialAbility: {
     type: 'knockback',

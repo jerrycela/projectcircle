@@ -240,6 +240,10 @@ export class DeployPanel {
     statusText.setOrigin(0.5)
     container.add(statusText)
 
+    // CD 進度條（卡片底部）
+    const cdBar = this.scene.add.graphics()
+    container.add(cdBar)
+
     // 互動區域
     const hitArea = this.scene.add.rectangle(0, 0, CARD_WIDTH, CARD_HEIGHT)
     hitArea.setInteractive({ useHandCursor: isActive })
@@ -247,10 +251,21 @@ export class DeployPanel {
     hitArea.on('pointerup', () => {
       if (card.isReady && !this.allDisabled && this.onDeploy) {
         this.onDeploy(card.monsterId)
+        // 點擊閃光回饋
+        const clickFlash = this.scene.add.graphics()
+        clickFlash.fillStyle(0xffffff, 0.3)
+        clickFlash.fillRoundedRect(-CARD_WIDTH / 2, -CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 6)
+        container.add(clickFlash)
+        this.scene.tweens.add({
+          targets: clickFlash,
+          alpha: 0,
+          duration: 200,
+          onComplete: () => clickFlash.destroy(),
+        })
       }
     })
 
-    // hover 效果
+    // hover 效果（帶縮放動畫）
     hitArea.on('pointerover', () => {
       if (card.isReady && !this.allDisabled) {
         bg.clear()
@@ -258,6 +273,13 @@ export class DeployPanel {
         bg.fillRoundedRect(-CARD_WIDTH / 2, -CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 6)
         bg.lineStyle(2, 0x8888aa, 1)
         bg.strokeRoundedRect(-CARD_WIDTH / 2, -CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 6)
+        this.scene.tweens.add({
+          targets: container,
+          scaleX: 1.06,
+          scaleY: 1.06,
+          duration: 120,
+          ease: 'Back.easeOut',
+        })
       }
     })
 
@@ -270,6 +292,12 @@ export class DeployPanel {
       bg.fillRoundedRect(-CARD_WIDTH / 2, -CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 6)
       bg.lineStyle(2, brC, 1)
       bg.strokeRoundedRect(-CARD_WIDTH / 2, -CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 6)
+      this.scene.tweens.add({
+        targets: container,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 100,
+      })
     })
 
     container.add(hitArea)
@@ -279,6 +307,7 @@ export class DeployPanel {
     container.setData('nameText', nameText)
     container.setData('statusText', statusText)
     container.setData('hitArea', hitArea)
+    container.setData('cdBar', cdBar)
     container.setData('cardIndex', index)
 
     return container
@@ -296,6 +325,7 @@ export class DeployPanel {
       const bg = container.getData('bg') as Phaser.GameObjects.Graphics
       const statusText = container.getData('statusText') as Phaser.GameObjects.Text
       const hitArea = container.getData('hitArea') as Phaser.GameObjects.Rectangle
+      const cdBar = container.getData('cdBar') as Phaser.GameObjects.Graphics
 
       const isActive = card.isReady && !this.allDisabled
       const bgColor = isActive ? CARD_BG : CARD_BG_DISABLED
@@ -307,6 +337,12 @@ export class DeployPanel {
       bg.fillRoundedRect(-CARD_WIDTH / 2, -CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 6)
       bg.lineStyle(2, borderColor, 1)
       bg.strokeRoundedRect(-CARD_WIDTH / 2, -CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 6)
+
+      // READY 狀態：亮色上邊緣高光
+      if (isActive) {
+        bg.fillStyle(0x44cc44, 0.15)
+        bg.fillRect(-CARD_WIDTH / 2 + 3, -CARD_HEIGHT / 2 + 1, CARD_WIDTH - 6, 2)
+      }
 
       // 更新狀態文字
       if (this.allDisabled) {
@@ -322,6 +358,24 @@ export class DeployPanel {
         statusText.setText(`${cdSec}s`)
         statusText.setColor(`#${UI_TEXT_DIM.toString(16).padStart(6, '0')}`)
         statusText.setFontStyle('normal')
+      }
+
+      // CD 進度條（卡片底部，冷卻中才顯示）
+      cdBar.clear()
+      if (!card.isReady && card.cooldown > 0) {
+        const ratio = card.remainingCD / card.cooldown
+        const barW = CARD_WIDTH - 12
+        const barH = 3
+        const barX = -barW / 2
+        const barY = CARD_HEIGHT / 2 - 8
+        // 背景
+        cdBar.fillStyle(0x111118, 0.8)
+        cdBar.fillRect(barX, barY, barW, barH)
+        // 填充（冷卻殘留比例，藍色漸變到綠色）
+        const fillW = barW * (1 - ratio)
+        const fillColor = ratio > 0.5 ? 0x4466aa : 0x44aa66
+        cdBar.fillStyle(fillColor, 0.9)
+        cdBar.fillRect(barX, barY, fillW, barH)
       }
 
       // 更新互動性

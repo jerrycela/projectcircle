@@ -267,8 +267,9 @@ function handleAttacking(
 
   const target = enemies[ai.targetIndex]
 
-  // 超出攻擊範圍 → MOVING_TO_TARGET
-  if (!isInAttackRange(unitX, unitY, target.x, target.y, attackRange)) {
+  // 超出攻擊範圍 → MOVING_TO_TARGET（使用遲滯閾值避免振盪）
+  const exitRange = attackRange * 1.5
+  if (!isInAttackRange(unitX, unitY, target.x, target.y, exitRange)) {
     return {
       newAI: { ...ai, state: AIState.MOVING_TO_TARGET },
       moveToX: null,

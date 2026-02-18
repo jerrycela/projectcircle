@@ -43,6 +43,7 @@ export interface MonsterStats {
   readonly attackInterval: number   // 秒
   readonly moveSpeed: number        // 像素/秒 (0 = 站樁)
   readonly attackRange: number      // 像素
+  readonly launchType: 'bounce' | 'pierce'
 }
 
 export interface MonsterDefinition {
@@ -69,6 +70,7 @@ export interface EvolutionStats {
   readonly attackInterval: number
   readonly moveSpeed?: number
   readonly attackRange?: number
+  readonly launchType?: 'bounce' | 'pierce'
 }
 
 export interface SpecialAbility {

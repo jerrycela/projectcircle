@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { generateAllTextures } from '../utils/texture-factory'
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -28,6 +29,9 @@ export class BootScene extends Phaser.Scene {
     if (!this.game.events) {
       throw new Error('Game events not initialized')
     }
+
+    // 生成所有像素藝術 texture
+    generateAllTextures(this)
 
     // 轉場到主選單
     this.scene.start('MenuScene')

@@ -10,6 +10,7 @@ export const goblin: MonsterDefinition = {
     attackInterval: 1.0,
     moveSpeed: 130,
     attackRange: 30,
+    launchType: 'bounce',
   },
   aiType: 'melee_aggressive',
   deployCooldown: 1000,

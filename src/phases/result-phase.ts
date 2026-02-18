@@ -25,13 +25,13 @@ import {
   GAME_WIDTH,
   ROOM_WIDTH,
   ROOM_HEIGHT,
-  UI_BG,
-  UI_PANEL,
-  UI_BORDER,
   UI_TEXT,
   UI_TEXT_DIM,
+  UI_ACCENT,
+  UI_GOLD,
   ALLY_COLOR,
 } from '../config/constants'
+import { drawPanel } from '../utils/visual-factory'
 
 // Layout constants
 const ROOM_X = (GAME_WIDTH - ROOM_WIDTH) / 2
@@ -119,50 +119,156 @@ export class ResultPhase implements Phase {
 
     // Panel background
     const panelHeight = 140
-    const bg = this.scene.add.rectangle(
-      ROOM_X + PANEL_WIDTH / 2,
-      RESULT_Y + panelHeight / 2,
-      PANEL_WIDTH,
-      panelHeight,
-      UI_PANEL
-    )
-    bg.setStrokeStyle(2, UI_BORDER)
-    this.gameObjects.push(bg)
+    const panelGfx = this.scene.add.graphics()
+    drawPanel(panelGfx, ROOM_X, RESULT_Y, PANEL_WIDTH, panelHeight, 0.7, 8)
+    this.gameObjects.push(panelGfx)
 
-    // Title
+    // Title（帶入場動畫 + 描邊 — ProjectDK 風格）
     const title = this.scene.add.text(
       ROOM_X + PANEL_PADDING,
       RESULT_Y + PANEL_PADDING,
-      '-- Battle Summary --',
-      { fontSize: '16px', color: '#44ff44', fontStyle: 'bold' }
+      '\u6230\u9B25\u7D50\u7B97',
+      { fontSize: '18px', color: '#ffcc44', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 3 }
     )
+    title.setAlpha(0)
+    this.scene.tweens.add({
+      targets: title,
+      alpha: 1,
+      y: title.y,
+      duration: 250,
+      ease: 'Quad.easeOut',
+    })
     this.gameObjects.push(title)
 
-    // Gold earned
+    // Gold earned（帶計數動畫 + 更大圖示）
+    const goldIcon = this.scene.add.graphics()
+    // 金幣外光
+    goldIcon.fillStyle(UI_GOLD, 0.2)
+    goldIcon.fillCircle(ROOM_X + PANEL_PADDING + 8, RESULT_Y + PANEL_PADDING + 40, 14)
+    // 金幣本體
+    goldIcon.fillStyle(UI_GOLD, 1)
+    goldIcon.fillCircle(ROOM_X + PANEL_PADDING + 8, RESULT_Y + PANEL_PADDING + 40, 8)
+    // 金幣高光
+    goldIcon.fillStyle(0xffffff, 0.3)
+    goldIcon.fillCircle(ROOM_X + PANEL_PADDING + 6, RESULT_Y + PANEL_PADDING + 38, 3)
+    goldIcon.setAlpha(0)
+    this.scene.tweens.add({
+      targets: goldIcon,
+      alpha: 1,
+      delay: 200,
+      duration: 200,
+    })
+    this.gameObjects.push(goldIcon)
+
     const goldText = this.scene.add.text(
-      ROOM_X + PANEL_PADDING,
+      ROOM_X + PANEL_PADDING + 18,
       RESULT_Y + PANEL_PADDING + 28,
-      `Gold earned: +${goldEarned}`,
-      { fontSize: '14px', color: `#${UI_TEXT.toString(16)}` }
+      '+0',
+      { fontSize: '18px', color: '#ffdd44', fontFamily: 'monospace', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2 }
     )
+    goldText.setAlpha(0)
     this.gameObjects.push(goldText)
 
-    // Monsters XP info
+    // 金幣計數動畫（200ms 延遲後開始，400ms 內數完）
+    this.scene.tweens.add({
+      targets: goldText,
+      alpha: 1,
+      delay: 200,
+      duration: 200,
+    })
+    if (goldEarned > 0) {
+      const counter = { val: 0 }
+      this.scene.tweens.add({
+        targets: counter,
+        val: goldEarned,
+        delay: 300,
+        duration: 400,
+        ease: 'Quad.easeOut',
+        onUpdate: () => {
+          goldText.setText(`+${Math.floor(counter.val)}`)
+        },
+      })
+    }
+
+    // Monsters XP info with animated progress bar
     let yOffset = RESULT_Y + PANEL_PADDING + 52
-    for (const monster of monsters) {
+    for (let mi = 0; mi < monsters.length; mi++) {
+      const monster = monsters[mi]
       const monsterDef = DataRegistry.getMonsterById(monster.monsterId)
       const name = monsterDef?.name ?? monster.monsterId
+      const entryDelay = 400 + mi * 150
+
       const xpLine = this.scene.add.text(
         ROOM_X + PANEL_PADDING,
         yOffset,
         `${name}: XP ${monster.currentXP} / ${DATA_CONSTANTS.EVOLUTION_XP_THRESHOLD}`,
         { fontSize: '13px', color: `#${UI_TEXT_DIM.toString(16)}` }
       )
+      xpLine.setAlpha(0)
+      this.scene.tweens.add({
+        targets: xpLine,
+        alpha: 1,
+        x: xpLine.x,
+        delay: entryDelay,
+        duration: 200,
+        ease: 'Quad.easeOut',
+      })
       this.gameObjects.push(xpLine)
+
+      // XP progress bar（帶填充動畫）
+      const barX = ROOM_X + PANEL_WIDTH - PANEL_PADDING - 80
+      const barY = yOffset + 4
+      const barWidth = 80
+      const barHeight = 8
+      const xpRatio = Math.min(monster.currentXP / DATA_CONSTANTS.EVOLUTION_XP_THRESHOLD, 1)
+
+      const xpBarGfx = this.scene.add.graphics()
+      // 背景
+      xpBarGfx.fillStyle(0x222230, 1)
+      xpBarGfx.fillRoundedRect(barX, barY, barWidth, barHeight, 3)
+      xpBarGfx.setAlpha(0)
+      this.gameObjects.push(xpBarGfx)
+
+      this.scene.tweens.add({
+        targets: xpBarGfx,
+        alpha: 1,
+        delay: entryDelay,
+        duration: 200,
+      })
+
+      // 填充條（延遲後從 0 動畫到目標值）
+      const fillGfx = this.scene.add.graphics()
+      this.gameObjects.push(fillGfx)
+      const fillAnim = { ratio: 0 }
+      this.scene.tweens.add({
+        targets: fillAnim,
+        ratio: xpRatio,
+        delay: entryDelay + 200,
+        duration: 500,
+        ease: 'Quad.easeOut',
+        onUpdate: () => {
+          fillGfx.clear()
+          const fillW = barWidth * fillAnim.ratio
+          if (fillW > 0) {
+            // 底層暗色
+            fillGfx.fillStyle(0x336688, 1)
+            fillGfx.fillRoundedRect(barX, barY, fillW, barHeight, 3)
+            // 上層亮色
+            fillGfx.fillStyle(UI_ACCENT, 1)
+            fillGfx.fillRoundedRect(barX, barY, fillW, Math.ceil(barHeight * 0.6), 3)
+            // 頂部高光線
+            fillGfx.fillStyle(0xaaddff, 0.4)
+            fillGfx.fillRect(barX + 1, barY + 1, fillW - 2, 1)
+          }
+        },
+      })
+
       yOffset += 20
     }
 
-    // Tap hint
+    // Tap hint with floating animation
     const hint = this.scene.add.text(
       ROOM_X + PANEL_WIDTH / 2,
       RESULT_Y + panelHeight - PANEL_PADDING,
@@ -171,6 +277,15 @@ export class ResultPhase implements Phase {
     )
     hint.setOrigin(0.5, 1)
     this.gameObjects.push(hint)
+
+    this.scene.tweens.add({
+      targets: hint,
+      y: hint.y - 3,
+      duration: 500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
 
     // Tap to advance
     const hitArea = this.scene.add.rectangle(
@@ -236,24 +351,34 @@ export class ResultPhase implements Phase {
     const monsterDef = DataRegistry.getMonsterById(evo.monsterId)
     const monsterName = monsterDef?.name ?? evo.monsterId
 
-    // Panel
+    // Panel（ProjectDK 多層面板）
     const panelHeight = 260
-    const bg = this.scene.add.rectangle(
-      ROOM_X + PANEL_WIDTH / 2,
-      RESULT_Y + panelHeight / 2,
-      PANEL_WIDTH,
-      panelHeight,
-      UI_PANEL
-    )
-    bg.setStrokeStyle(2, UI_BORDER)
-    this.gameObjects.push(bg)
+    const bgGfx = this.scene.add.graphics()
+    drawPanel(bgGfx, ROOM_X, RESULT_Y, PANEL_WIDTH, panelHeight, 0.85, 8)
+    this.gameObjects.push(bgGfx)
 
-    // Title
+    // Title（更大、帶描邊 + 金色光暈）
+    const evoTitleGlow = this.scene.add.circle(
+      ROOM_X + PANEL_WIDTH / 2, RESULT_Y + PANEL_PADDING + 8,
+      60, 0xddaa44, 0.08
+    )
+    this.gameObjects.push(evoTitleGlow)
+    this.scene.tweens.add({
+      targets: evoTitleGlow,
+      alpha: 0.15,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
     const title = this.scene.add.text(
       ROOM_X + PANEL_WIDTH / 2,
       RESULT_Y + PANEL_PADDING,
       `${monsterName} is ready to evolve!`,
-      { fontSize: '15px', color: '#ffcc44', fontStyle: 'bold' }
+      { fontSize: '17px', color: '#ffdd44', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 3 }
     )
     title.setOrigin(0.5, 0)
     this.gameObjects.push(title)
@@ -265,7 +390,7 @@ export class ResultPhase implements Phase {
 
     this.createEvoCard(
       evo.routeA,
-      'Route A',
+      'A \u8DEF\u7DDA',
       ROOM_X + PANEL_PADDING,
       cardY,
       cardWidth,
@@ -274,7 +399,7 @@ export class ResultPhase implements Phase {
     )
     this.createEvoCard(
       evo.routeB,
-      'Route B',
+      'B \u8DEF\u7DDA',
       ROOM_X + PANEL_PADDING * 2 + cardWidth,
       cardY,
       cardWidth,
@@ -292,14 +417,19 @@ export class ResultPhase implements Phase {
     h: number,
     monsterId: string
   ): void {
-    const cardBg = this.scene.add.rectangle(
+    // Card background using drawPanel
+    const cardGfx = this.scene.add.graphics()
+    drawPanel(cardGfx, x, y, w, h, 0.7, 6)
+    this.gameObjects.push(cardGfx)
+
+    // Invisible hit area for interaction
+    const hitArea = this.scene.add.rectangle(
       x + w / 2, y + h / 2,
       w, h,
-      UI_BG
+      0x000000, 0
     )
-    cardBg.setStrokeStyle(1, UI_BORDER)
-    cardBg.setInteractive({ useHandCursor: true })
-    this.gameObjects.push(cardBg)
+    hitArea.setInteractive({ useHandCursor: true })
+    this.gameObjects.push(hitArea)
 
     // Route label
     const label = this.scene.add.text(
@@ -319,56 +449,97 @@ export class ResultPhase implements Phase {
     name.setOrigin(0.5, 0)
     this.gameObjects.push(name)
 
-    // Stats
+    // Stats（彩色數值 + 描邊 — ProjectDK 風格）
     const stats = evoDef.evolvedStats
-    const statsText = [
-      `HP: ${stats.hp}`,
-      `ATK: ${stats.attack}`,
-      `SPD: ${stats.attackInterval}s`,
-    ].join('\n')
-
-    const statsDisplay = this.scene.add.text(
+    const hpText = this.scene.add.text(
       x + 8, y + 52,
-      statsText,
-      {
-        fontSize: '12px',
-        color: `#${UI_TEXT_DIM.toString(16)}`,
-        lineSpacing: 4,
-      }
+      `HP: ${stats.hp}`,
+      { fontSize: '12px', color: '#44cc66', fontFamily: 'monospace', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2 }
     )
-    this.gameObjects.push(statsDisplay)
+    this.gameObjects.push(hpText)
+    const atkText = this.scene.add.text(
+      x + 8, y + 68,
+      `ATK: ${stats.attack}`,
+      { fontSize: '12px', color: '#ff8866', fontFamily: 'monospace', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2 }
+    )
+    this.gameObjects.push(atkText)
+    const spdText = this.scene.add.text(
+      x + 8, y + 84,
+      `SPD: ${stats.attackInterval}s`,
+      { fontSize: '12px', color: '#88bbff', fontFamily: 'monospace', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2 }
+    )
+    this.gameObjects.push(spdText)
 
-    // Ability
+    // Ability（更亮的文字）
     const abilityText = this.scene.add.text(
-      x + 8, y + 110,
+      x + 8, y + 104,
       evoDef.specialAbility.description,
       {
         fontSize: '11px',
-        color: '#88ccff',
+        color: '#aaddff',
         wordWrap: { width: w - 16 },
+        stroke: '#000000',
+        strokeThickness: 1,
       }
     )
     this.gameObjects.push(abilityText)
 
-    // Select button text
+    // Select button text（更大 + 脈動）
     const selectText = this.scene.add.text(
       x + w / 2, y + h - 16,
-      'Select',
-      { fontSize: '13px', color: '#44ff44', fontStyle: 'bold' }
+      '\u9078\u64C7',
+      { fontSize: '14px', color: '#44ff44', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2 }
     )
     selectText.setOrigin(0.5, 1)
     this.gameObjects.push(selectText)
-
-    // Hover effect
-    cardBg.on('pointerover', () => {
-      cardBg.setStrokeStyle(2, ALLY_COLOR)
+    this.scene.tweens.add({
+      targets: selectText,
+      alpha: { from: 1, to: 0.6 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
     })
-    cardBg.on('pointerout', () => {
-      cardBg.setStrokeStyle(1, UI_BORDER)
+
+    // Hover effect: 背景亮化 + 邊框高亮 + 輕微放大
+    hitArea.on('pointerover', () => {
+      cardGfx.clear()
+      drawPanel(cardGfx, x, y, w, h, 0.85, 6)
+      cardGfx.lineStyle(2, ALLY_COLOR, 0.8)
+      cardGfx.strokeRoundedRect(x, y, w, h, 6)
+      this.scene.tweens.add({
+        targets: hitArea,
+        scaleX: 1.04,
+        scaleY: 1.04,
+        duration: 120,
+        ease: 'Back.easeOut',
+      })
+    })
+    hitArea.on('pointerout', () => {
+      cardGfx.clear()
+      drawPanel(cardGfx, x, y, w, h, 0.7, 6)
+      this.scene.tweens.add({
+        targets: hitArea,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 100,
+      })
     })
 
-    // Click handler
-    cardBg.on('pointerup', () => {
+    // Click handler（帶閃光回饋）
+    hitArea.on('pointerup', () => {
+      const flash = this.scene.add.rectangle(x + w / 2, y + h / 2, w, h, 0xffffff, 0.2)
+      flash.setOrigin(0.5)
+      this.scene.tweens.add({
+        targets: flash,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => flash.destroy(),
+      })
       this.onEvolutionChosen(monsterId, evoDef)
     })
   }
@@ -409,24 +580,19 @@ export class ResultPhase implements Phase {
     // Shuffle and pick 3 (with possible duplicates since pool is exactly 3)
     const options = this.shuffleArray([...roomPool]).slice(0, 3)
 
-    // Panel
+    // Panel（ProjectDK 多層面板）
     const panelHeight = 240
-    const bg = this.scene.add.rectangle(
-      ROOM_X + PANEL_WIDTH / 2,
-      RESULT_Y + panelHeight / 2,
-      PANEL_WIDTH,
-      panelHeight,
-      UI_PANEL
-    )
-    bg.setStrokeStyle(2, UI_BORDER)
-    this.gameObjects.push(bg)
+    const bgGfx = this.scene.add.graphics()
+    drawPanel(bgGfx, ROOM_X, RESULT_Y, PANEL_WIDTH, panelHeight, 0.85, 8)
+    this.gameObjects.push(bgGfx)
 
-    // Title
+    // Title（更大、帶描邊）
     const title = this.scene.add.text(
       ROOM_X + PANEL_WIDTH / 2,
       RESULT_Y + PANEL_PADDING,
-      'Choose a Room',
-      { fontSize: '16px', color: '#ffcc44', fontStyle: 'bold' }
+      '\u9078\u64C7\u623F\u9593',
+      { fontSize: '18px', color: '#ffcc44', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 3 }
     )
     title.setOrigin(0.5, 0)
     this.gameObjects.push(title)
@@ -450,31 +616,74 @@ export class ResultPhase implements Phase {
     w: number,
     h: number
   ): void {
+    // Card background using drawPanel
+    const cardGfx = this.scene.add.graphics()
+    drawPanel(cardGfx, x, y, w, h, 0.7, 6)
+    this.gameObjects.push(cardGfx)
+
+    // Invisible hit area for interaction
     const cardBg = this.scene.add.rectangle(
       x + w / 2, y + h / 2,
       w, h,
-      UI_BG
+      0x000000, 0
     )
-    cardBg.setStrokeStyle(1, UI_BORDER)
     cardBg.setInteractive({ useHandCursor: true })
     this.gameObjects.push(cardBg)
 
-    // Room name
+    // Room type icon at top（更大 + 發光底圈）
+    const iconGfx = this.scene.add.graphics()
+    const iconCx = x + w / 2
+    const iconCy = y + 16
+    let iconColor = UI_ACCENT
+    if (room.type === 'treasury') {
+      iconColor = UI_GOLD
+      // 金幣底光
+      iconGfx.fillStyle(UI_GOLD, 0.15)
+      iconGfx.fillCircle(iconCx, iconCy, 14)
+      // Gold circle
+      iconGfx.fillStyle(UI_GOLD, 1)
+      iconGfx.fillCircle(iconCx, iconCy, 8)
+      // 金幣高光
+      iconGfx.fillStyle(0xffffff, 0.3)
+      iconGfx.fillCircle(iconCx - 2, iconCy - 2, 3)
+    } else if (room.type === 'training_ground') {
+      iconColor = UI_ACCENT
+      iconGfx.fillStyle(UI_ACCENT, 0.15)
+      iconGfx.fillCircle(iconCx, iconCy, 14)
+      iconGfx.fillStyle(UI_ACCENT, 1)
+      iconGfx.beginPath()
+      iconGfx.moveTo(iconCx, iconCy - 9)
+      iconGfx.lineTo(iconCx + 8, iconCy + 6)
+      iconGfx.lineTo(iconCx - 8, iconCy + 6)
+      iconGfx.closePath()
+      iconGfx.fillPath()
+    } else if (room.type === 'chicken_coop') {
+      iconColor = 0xeeddcc
+      iconGfx.fillStyle(0xeeddcc, 0.15)
+      iconGfx.fillCircle(iconCx, iconCy, 14)
+      iconGfx.fillStyle(0xeeddcc, 1)
+      iconGfx.fillEllipse(iconCx, iconCy, 12, 16)
+    }
+    this.gameObjects.push(iconGfx)
+
+    // Room name（加描邊，用房間類型色）
+    const nameColorHex = `#${iconColor.toString(16).padStart(6, '0')}`
     const name = this.scene.add.text(
-      x + w / 2, y + 10,
+      x + w / 2, y + 30,
       room.name,
-      { fontSize: '13px', color: `#${UI_TEXT.toString(16)}`, fontStyle: 'bold' }
+      { fontSize: '13px', color: nameColorHex, fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2 }
     )
     name.setOrigin(0.5, 0)
     this.gameObjects.push(name)
 
     // Room effect
     const effectText = this.scene.add.text(
-      x + 4, y + 34,
+      x + 4, y + 48,
       room.effect.description,
       {
         fontSize: '11px',
-        color: '#88ccff',
+        color: '#aaddff',
         wordWrap: { width: w - 8 },
       }
     )
@@ -511,17 +720,21 @@ export class ResultPhase implements Phase {
         fontSize: '9px',
         color: `#${UI_TEXT_DIM.toString(16)}`,
         wordWrap: { width: w - 8 },
-        lineSpacing: 2,
+        lineSpacing: 4,
       }
     )
     this.gameObjects.push(desc)
 
     // Hover effect
     cardBg.on('pointerover', () => {
-      cardBg.setStrokeStyle(2, ALLY_COLOR)
+      cardGfx.clear()
+      drawPanel(cardGfx, x, y, w, h, 0.7, 6)
+      cardGfx.lineStyle(2, ALLY_COLOR, 1)
+      cardGfx.strokeRoundedRect(x, y, w, h, 6)
     })
     cardBg.on('pointerout', () => {
-      cardBg.setStrokeStyle(1, UI_BORDER)
+      cardGfx.clear()
+      drawPanel(cardGfx, x, y, w, h, 0.7, 6)
     })
 
     // Click handler
@@ -574,82 +787,185 @@ export class ResultPhase implements Phase {
     const roomsConquered = state.run.conqueredRooms.length
     const totalGold = state.run.gold
 
-    // Dark overlay on room area
+    // 畫面震動
+    this.scene.cameras.main.shake(300, 0.008)
+
+    // Dark overlay（漸入）
     const overlay = this.scene.add.rectangle(
       ROOM_X + ROOM_WIDTH / 2,
       ROOM_Y + ROOM_HEIGHT / 2,
       ROOM_WIDTH,
       ROOM_HEIGHT,
       0x000000,
-      0.6
+      0
     )
+    this.scene.tweens.add({
+      targets: overlay,
+      fillAlpha: 0.75,
+      duration: 500,
+      ease: 'Quad.easeIn',
+    })
     this.gameObjects.push(overlay)
 
-    // "Run Over" title
+    // 紅色危險光暈（ProjectDK 遊戲結束氛圍）
+    const dangerGlow = this.scene.add.circle(
+      ROOM_X + ROOM_WIDTH / 2, ROOM_Y + ROOM_HEIGHT / 2,
+      120, 0xff2222, 0.1
+    )
+    this.scene.tweens.add({
+      targets: dangerGlow,
+      alpha: 0.2,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+    this.gameObjects.push(dangerGlow)
+
+    // Title（延遲入場 + 縮放衝擊 + 更大字體）
     const title = this.scene.add.text(
       ROOM_X + ROOM_WIDTH / 2,
       ROOM_Y + ROOM_HEIGHT / 2 - 40,
-      'Run Over',
-      { fontSize: '28px', color: '#ff4444', fontStyle: 'bold' }
+      '\u63A2\u7D22\u7D50\u675F',
+      { fontSize: '32px', color: '#ff4444', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 4 }
     )
     title.setOrigin(0.5)
+    title.setAlpha(0)
+    title.setScale(1.8)
+    this.scene.tweens.add({
+      targets: title,
+      alpha: 1,
+      scaleX: 1,
+      scaleY: 1,
+      delay: 300,
+      duration: 400,
+      ease: 'Back.easeOut',
+    })
     this.gameObjects.push(title)
+    // 標題呼吸
+    this.scene.tweens.add({
+      targets: title,
+      alpha: { from: 1, to: 0.8 },
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      delay: 800,
+      ease: 'Sine.easeInOut',
+    })
 
-    // Panel below room area
-    const panelHeight = 140
-    const bg = this.scene.add.rectangle(
-      ROOM_X + PANEL_WIDTH / 2,
-      RESULT_Y + panelHeight / 2,
-      PANEL_WIDTH,
-      panelHeight,
-      UI_PANEL
-    )
-    bg.setStrokeStyle(2, UI_BORDER)
-    this.gameObjects.push(bg)
+    // Panel（延遲淡入 + 更大）
+    const panelHeight = 160
+    const panelGfx = this.scene.add.graphics()
+    drawPanel(panelGfx, ROOM_X, RESULT_Y, PANEL_WIDTH, panelHeight, 0.85, 8)
+    panelGfx.setAlpha(0)
+    this.scene.tweens.add({
+      targets: panelGfx,
+      alpha: 1,
+      delay: 600,
+      duration: 300,
+    })
+    this.gameObjects.push(panelGfx)
 
-    // Final stats
+    // Final stats（延遲入場 + 更大字 + 描邊）
     const statsText = this.scene.add.text(
       ROOM_X + PANEL_PADDING,
       RESULT_Y + PANEL_PADDING,
-      `Rooms conquered: ${roomsConquered}\nGold earned: ${totalGold}`,
+      `\u5F81\u670D\u623F\u9593: ${roomsConquered}\n\u7372\u5F97\u91D1\u5E63: ${totalGold}`,
       {
-        fontSize: '14px',
+        fontSize: '16px',
         color: `#${UI_TEXT.toString(16)}`,
-        lineSpacing: 6,
+        lineSpacing: 8,
+        stroke: '#000000',
+        strokeThickness: 2,
       }
     )
+    statsText.setAlpha(0)
+    this.scene.tweens.add({
+      targets: statsText,
+      alpha: 1,
+      delay: 700,
+      duration: 300,
+    })
     this.gameObjects.push(statsText)
 
-    // "Try Again" button
-    const btnWidth = 160
-    const btnHeight = 40
-    const btnX = ROOM_X + PANEL_WIDTH / 2
-    const btnY = RESULT_Y + panelHeight - PANEL_PADDING - btnHeight / 2
+    // Button（更大 + 脈動邊框 — ProjectDK 風格）
+    const btnWidth = 180
+    const btnHeight = 48
+    const btnX = ROOM_X + PANEL_WIDTH / 2 - btnWidth / 2
+    const btnY = RESULT_Y + panelHeight - PANEL_PADDING - btnHeight
 
-    const btnBg = this.scene.add.rectangle(
-      btnX, btnY,
-      btnWidth, btnHeight,
-      ALLY_COLOR
+    // 按鈕底部光暈
+    const btnGlow = this.scene.add.circle(
+      btnX + btnWidth / 2, btnY + btnHeight / 2,
+      50, UI_ACCENT, 0.08
     )
-    btnBg.setStrokeStyle(2, UI_BORDER)
-    btnBg.setInteractive({ useHandCursor: true })
-    this.gameObjects.push(btnBg)
+    this.gameObjects.push(btnGlow)
+    this.scene.tweens.add({
+      targets: btnGlow,
+      alpha: 0.15,
+      scaleX: 1.1,
+      scaleY: 1.1,
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+
+    const btnGfx = this.scene.add.graphics()
+    drawPanel(btnGfx, btnX, btnY, btnWidth, btnHeight, 0.8, 8)
+    this.gameObjects.push(btnGfx)
+
+    // 脈動邊框
+    const btnBorderGfx = this.scene.add.graphics()
+    this.gameObjects.push(btnBorderGfx)
+    const drawRetryBorder = (alpha: number) => {
+      btnBorderGfx.clear()
+      btnBorderGfx.lineStyle(2, UI_ACCENT, alpha)
+      btnBorderGfx.strokeRoundedRect(btnX, btnY, btnWidth, btnHeight, 8)
+    }
+    drawRetryBorder(0.4)
+    this.scene.tweens.addCounter({
+      from: 0.3,
+      to: 0.8,
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      onUpdate: (tween) => drawRetryBorder(tween.getValue() ?? 0.5),
+    })
+
+    // Invisible hit area for button interaction
+    const btnHit = this.scene.add.rectangle(
+      btnX + btnWidth / 2, btnY + btnHeight / 2,
+      btnWidth, btnHeight,
+      0x000000, 0
+    )
+    btnHit.setInteractive({ useHandCursor: true })
+    this.gameObjects.push(btnHit)
 
     const btnText = this.scene.add.text(
-      btnX, btnY,
-      'Try Again',
-      { fontSize: '16px', color: `#${UI_TEXT.toString(16)}`, fontStyle: 'bold' }
+      btnX + btnWidth / 2, btnY + btnHeight / 2,
+      '\u518D\u8A66\u4E00\u6B21',
+      { fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 3 }
     )
     btnText.setOrigin(0.5)
     this.gameObjects.push(btnText)
 
-    btnBg.on('pointerover', () => {
-      btnBg.setFillStyle(0xaa66cc)
+    btnHit.on('pointerover', () => {
+      btnGfx.clear()
+      drawPanel(btnGfx, btnX, btnY, btnWidth, btnHeight, 0.95, 8)
+      btnGfx.lineStyle(2, UI_ACCENT, 1)
+      btnGfx.strokeRoundedRect(btnX, btnY, btnWidth, btnHeight, 8)
     })
-    btnBg.on('pointerout', () => {
-      btnBg.setFillStyle(ALLY_COLOR)
+    btnHit.on('pointerout', () => {
+      btnGfx.clear()
+      drawPanel(btnGfx, btnX, btnY, btnWidth, btnHeight, 0.8, 8)
     })
-    btnBg.on('pointerup', () => {
+    btnHit.on('pointerup', () => {
       this.scene.events.emit('run-over')
       eventBus.emit({ type: 'RUN_COMPLETED', success: false })
     })

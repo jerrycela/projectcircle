@@ -60,7 +60,7 @@ export function createInitialRunState(): RunState {
     currentRoomIndex: 0,
     conqueredRooms: [],
     monsters: [],
-    gold: 0,
+    gold: 200,
     phase: 'explore',
     battleState: {
       isActive: false,

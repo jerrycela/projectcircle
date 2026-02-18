@@ -12,6 +12,7 @@ export const skeletonArcher: EvolutionDefinition = {
     attack: 12,
     attackInterval: 1.5,
     attackRange: 220,
+    launchType: 'pierce',
   },
   specialAbility: {
     type: 'range_boost',

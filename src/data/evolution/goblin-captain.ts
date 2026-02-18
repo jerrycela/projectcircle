@@ -11,6 +11,7 @@ export const goblinCaptain: EvolutionDefinition = {
     hp: 72,
     attack: 13,
     attackInterval: 1.0,
+    launchType: 'bounce',
   },
   specialAbility: {
     type: 'aura_atk',
