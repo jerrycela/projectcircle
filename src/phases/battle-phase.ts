@@ -3163,8 +3163,22 @@ export class BattlePhase implements Phase {
   // ============ 輸入處理 ============
 
   private setupInputHandlers(): void {
-    // pointerdown: 開始拖拽瞄準
+    // pointerdown: 記錄 picker 滑動起點 + 點外關閉；或開始拖拽瞄準
     this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // picker 模式：記錄滑動起點，點擊 picker 外部關閉
+      if (this.pickerMode) {
+        this.pickerStartX = pointer.x
+        this.pickerStartY = pointer.y
+
+        if (this.pickerContainer) {
+          const bounds = this.pickerContainer.getBounds()
+          if (!Phaser.Geom.Rectangle.Contains(bounds, pointer.x, pointer.y)) {
+            this.hidePicker()
+          }
+        }
+        return
+      }
+
       if (!this.aimMode) return
 
       const dx = pointer.worldX - LAUNCH_PAD_X
