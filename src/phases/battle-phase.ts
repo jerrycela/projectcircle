@@ -2767,28 +2767,6 @@ export class BattlePhase implements Phase {
     })
 
     this.aimLine = this.scene.add.graphics()
-
-    // 計算並顯示連射數量 badge
-    const runState = gameStore.getState().run
-    const instanceCount = runState.monsters.filter(m => m.monsterId === monsterId).length
-    const aliveAllies = this.units.filter(u => u.faction === 'ally' && u.alive).length
-    const burstCount = Math.min(instanceCount, Math.max(0, this.getEffectiveAllyLimit() - aliveAllies))
-
-    if (burstCount > 1) {
-      const badge = createTextBadge(
-        this.scene,
-        LAUNCH_PAD_X + 22,
-        LAUNCH_PAD_Y - 22,
-        `x${burstCount}`,
-        {
-          fontSize: '11px',
-          color: '#ffffff',
-          paddingX: 4,
-          paddingY: 2,
-        }
-      )
-      this.burstCountBadge = badge
-    }
   }
 
   private exitAimMode(): void {
@@ -2810,11 +2788,6 @@ export class BattlePhase implements Phase {
     if (this.aimPowerText) {
       this.aimPowerText.destroy()
       this.aimPowerText = null
-    }
-
-    if (this.burstCountBadge) {
-      this.burstCountBadge.destroy(true)
-      this.burstCountBadge = null
     }
   }
 
@@ -3962,6 +3935,9 @@ export class BattlePhase implements Phase {
       this.burstCountBadge.destroy(true)
       this.burstCountBadge = null
     }
+
+    // picker 清理（立即，不需動畫）
+    this.hidePicker(true)
 
     // 瞄準模式清理
     this.exitAimMode()
