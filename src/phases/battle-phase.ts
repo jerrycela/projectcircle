@@ -2546,6 +2546,89 @@ export class BattlePhase implements Phase {
     })
   }
 
+  // ============ 數量選擇器 ============
+
+  private buildPickerUI(): void {
+    if (!this.pickerContainer) return
+
+    const w = 120
+    const h = 44
+
+    // 背景
+    const bg = this.scene.add.graphics()
+    bg.fillStyle(0x1a1a2e, 0.92)
+    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8)
+    bg.lineStyle(1, UI_ACCENT, 0.8)
+    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8)
+    this.pickerContainer.add(bg)
+
+    // 左側數字（前一個）
+    const prevText = this.scene.add.text(-38, 0, '', {
+      fontSize: '14px',
+      color: '#888888',
+      fontStyle: 'bold',
+    })
+    prevText.setOrigin(0.5)
+    this.pickerContainer.add(prevText)
+    this.pickerPrevText = prevText
+
+    // 中央數字（當前）
+    const currText = this.scene.add.text(0, 0, `${this.pickerCount}`, {
+      fontSize: '20px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 2,
+    })
+    currText.setOrigin(0.5)
+    this.pickerContainer.add(currText)
+    this.pickerCurrText = currText
+
+    // 右側數字（下一個）
+    const nextText = this.scene.add.text(38, 0, '', {
+      fontSize: '14px',
+      color: '#888888',
+      fontStyle: 'bold',
+    })
+    nextText.setOrigin(0.5)
+    this.pickerContainer.add(nextText)
+    this.pickerNextText = nextText
+
+    // 上方提示箭頭（↑ 向上拖曳瞄準）
+    const hintText = this.scene.add.text(0, -h / 2 - 12, '↑ 拖曳瞄準', {
+      fontSize: '10px',
+      color: '#aaaaaa',
+    })
+    hintText.setOrigin(0.5)
+    this.pickerContainer.add(hintText)
+
+    this.updatePickerDisplay()
+  }
+
+  private updatePickerDisplay(): void {
+    if (!this.pickerCurrText) return
+
+    const prev = this.pickerCount - 1
+    const next = this.pickerCount + 1
+
+    if (this.pickerPrevText) {
+      this.pickerPrevText.setText(prev >= 1 ? `${prev}` : '')
+    }
+    this.pickerCurrText.setText(`${this.pickerCount}`)
+    if (this.pickerNextText) {
+      this.pickerNextText.setText(next <= this.pickerMax ? `${next}` : '')
+    }
+
+    // 數字切換彈性動畫
+    this.scene.tweens.add({
+      targets: this.pickerCurrText,
+      scaleX: { from: 1.25, to: 1.0 },
+      scaleY: { from: 1.25, to: 1.0 },
+      duration: 100,
+      ease: 'Back.easeOut',
+    })
+  }
+
   // ============ 瞄準模式 ============
 
   private enterAimMode(monsterId: string): void {
