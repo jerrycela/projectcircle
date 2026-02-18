@@ -2437,16 +2437,23 @@ export class BattlePhase implements Phase {
     const now = this.scene.time.now
     if (now - card.lastDeployTime < card.cooldownMs) return
 
-    const aliveAllies = this.units.filter(u => u.faction === 'ally' && u.alive)
-    if (aliveAllies.length >= this.getEffectiveAllyLimit()) return
-
-    // 已在瞄準模式中，若再點同一張 → 取消
-    if (this.aimMode && this.aimMonsterId === card.monsterId) {
+    // 若在瞄準模式，退出
+    if (this.aimMode) {
       this.exitAimMode()
       return
     }
 
-    this.enterAimMode(card.monsterId)
+    // Toggle：點同一張卡片關閉 picker
+    if (this.pickerMode && this.pickerMonsterId === card.monsterId) {
+      this.hidePicker()
+      return
+    }
+
+    // 計算卡片世界座標 X
+    const containerX = this.deployPanelContainer?.x ?? 0
+    const cardWorldX = containerX + card.bg.x
+
+    this.showPicker(card.monsterId, cardWorldX)
   }
 
   private updateDeployPanel(time: number): void {
