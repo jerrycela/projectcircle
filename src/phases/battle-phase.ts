@@ -121,6 +121,9 @@ interface BattleUnit {
   launchTime: number                // 發射開始時間 (Date.now())
   launchType: 'bounce' | 'pierce'   // 碰撞型 or 貫穿型
   launchHitSet: Set<string>         // 發射中已命中的敵人 ID
+  collisionReactionCooldownUntil: number  // 下次可觸發碰撞反應的時間（Date.now() 為基準，0 = 可觸發）
+  isTaunting: boolean                     // 是否正在嘲諷中（避免重複嘲諷）
+  isDodgeInvincible: boolean              // 閃避無敵中
 }
 
 // ============ 部署面板 UI 資料結構 ============
@@ -1083,6 +1086,9 @@ export class BattlePhase implements Phase {
       launchTime: 0,
       launchType: 'bounce',
       launchHitSet: new Set(),
+      collisionReactionCooldownUntil: 0,
+      isTaunting: false,
+      isDodgeInvincible: false,
     }
   }
 
@@ -1158,6 +1164,9 @@ export class BattlePhase implements Phase {
       launchTime: 0,
       launchType,
       launchHitSet: new Set(),
+      collisionReactionCooldownUntil: 0,
+      isTaunting: false,
+      isDodgeInvincible: false,
     }
   }
 
@@ -1230,6 +1239,9 @@ export class BattlePhase implements Phase {
       launchTime: 0,
       launchType,
       launchHitSet: new Set(),
+      collisionReactionCooldownUntil: 0,
+      isTaunting: false,
+      isDodgeInvincible: false,
     }
   }
 
@@ -3471,6 +3483,9 @@ export class BattlePhase implements Phase {
       launchTime: 0,
       launchType: 'bounce',
       launchHitSet: new Set(),
+      collisionReactionCooldownUntil: 0,
+      isTaunting: false,
+      isDodgeInvincible: false,
     }
   }
 
