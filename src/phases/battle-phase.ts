@@ -248,7 +248,6 @@ export class BattlePhase implements Phase {
   private burstPower: number = 0       // 連射力道 (0-1)
   private lastBurstTime: number = 0
   private isBursting: boolean = false
-  private burstCountBadge: Phaser.GameObjects.Container | null = null
 
   // 數量選擇器
   private pickerMode: boolean = false
@@ -2553,6 +2552,8 @@ export class BattlePhase implements Phase {
     })
   }
 
+  // ============ 數量選擇器 ============
+
   private showPicker(monsterId: string, cardWorldX: number): void {
     this.hidePicker(true)
 
@@ -2618,6 +2619,8 @@ export class BattlePhase implements Phase {
     this.pickerPrevText = null
     this.pickerCurrText = null
     this.pickerNextText = null
+    // pickerCount 刻意不在此重設：showPicker 每次開啟時會重新計算並覆蓋它
+    // （pickerMax=1 直接跳 enterAimMode 的路徑也已在 showPicker 中設 pickerCount=1）
 
     // 還原所有卡片暗化（依照 CD 狀態重設）
     const now = this.scene.time.now
@@ -2645,8 +2648,6 @@ export class BattlePhase implements Phase {
       }
     }
   }
-
-  // ============ 數量選擇器 ============
 
   private buildPickerUI(): void {
     if (!this.pickerContainer) return
@@ -2773,6 +2774,7 @@ export class BattlePhase implements Phase {
     this.aimMode = false
     this.aimMonsterId = null
     this.aimStartPoint = null
+    this.pickerCount = 1
 
     if (this.aimPreview) {
       this.scene.tweens.killTweensOf(this.aimPreview)
@@ -3931,10 +3933,6 @@ export class BattlePhase implements Phase {
     // 連射系統清理
     this.burstQueue = []
     this.isBursting = false
-    if (this.burstCountBadge) {
-      this.burstCountBadge.destroy(true)
-      this.burstCountBadge = null
-    }
 
     // picker 清理（立即，不需動畫）
     this.hidePicker(true)
