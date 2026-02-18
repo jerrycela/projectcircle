@@ -3189,8 +3189,39 @@ export class BattlePhase implements Phase {
       this.aimStartPoint = { x: pointer.worldX, y: pointer.worldY }
     })
 
-    // pointermove: 更新瞄準線
+    // pointermove: picker 手勢 / 更新瞄準線
     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      // picker 模式的手勢處理
+      if (this.pickerMode && pointer.isDown) {
+        const dx = pointer.x - this.pickerStartX
+        const dy = pointer.y - this.pickerStartY
+        const absDx = Math.abs(dx)
+        const absDy = Math.abs(dy)
+
+        // 向上拖曳 > 20px 且垂直位移 > 水平位移 → 切換為瞄準
+        if (dy < -20 && absDy > absDx) {
+          const monsterId = this.pickerMonsterId!
+          this.hidePicker(true)
+          this.enterAimMode(monsterId)
+          // 以目前 pointer 位置作為瞄準起點
+          this.aimStartPoint = { x: pointer.worldX, y: pointer.worldY }
+          return
+        }
+
+        // 水平滑動 → 每 30px 換一格
+        if (absDx >= 30) {
+          const steps = Math.floor(absDx / 30)
+          const delta = dx > 0 ? steps : -steps
+          const newCount = Phaser.Math.Clamp(this.pickerCount + delta, 1, this.pickerMax)
+          if (newCount !== this.pickerCount) {
+            this.pickerCount = newCount
+            this.updatePickerDisplay()
+          }
+          this.pickerStartX = pointer.x  // 重設起點防止累積
+        }
+        return
+      }
+
       if (!this.aimMode || !this.aimStartPoint || !this.aimLine) return
 
       const dragX = pointer.worldX - this.aimStartPoint.x
