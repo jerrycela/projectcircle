@@ -16,4 +16,11 @@ export const skeleton: MonsterDefinition = {
   deployCooldown: 2000,
   description: '站樁射擊的遠程單位，投擲骨頭攻擊',
   tags: ['ranged', 'stationary'],
+  collisionReaction: {
+    type: 'push',
+    pushForce: 30,
+    slowPercent: 50,
+    pushDuration: 1000,
+    cooldown: 2000,
+  },
 }

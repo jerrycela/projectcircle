@@ -16,4 +16,11 @@ export const ogre: MonsterDefinition = {
   deployCooldown: 3000,
   description: '高 HP 的前排肉盾，衝向最近敵人吸引火力',
   tags: ['melee', 'tank'],
+  collisionReaction: {
+    type: 'taunt',
+    tauntRadius: 120,
+    tauntDuration: 3000,
+    maxTargets: 4,
+    cooldown: 4000,
+  },
 }

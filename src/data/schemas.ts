@@ -35,6 +35,33 @@ export type AffixType =
 
 export type ConsumableType = 'trap' | 'heal' | 'reinforcement' | 'crystal'
 
+// ============ 碰撞反應系統 ============
+
+export interface DodgeReaction {
+  readonly type: 'dodge'
+  readonly knockbackDistance: number   // 反彈距離（像素），建議 60
+  readonly invincibleDuration: number  // 無敵時間（ms），建議 500
+  readonly cooldown: number            // CD（ms），建議 3000
+}
+
+export interface PushReaction {
+  readonly type: 'push'
+  readonly pushForce: number           // 推力，建議 30
+  readonly slowPercent: number         // 減速百分比 0-90，建議 50
+  readonly pushDuration: number        // 推擠持續時間（ms），建議 1000
+  readonly cooldown: number            // CD（ms），建議 2000
+}
+
+export interface TauntReaction {
+  readonly type: 'taunt'
+  readonly tauntRadius: number         // 嘲諷半徑（像素），建議 120
+  readonly tauntDuration: number       // 持續時間（ms），建議 3000
+  readonly maxTargets: number          // 最多影響幾個敵人，建議 4
+  readonly cooldown: number            // CD（ms），建議 4000
+}
+
+export type CollisionReaction = DodgeReaction | PushReaction | TauntReaction
+
 // ============ 怪物系統 ============
 
 export interface MonsterStats {
@@ -55,6 +82,7 @@ export interface MonsterDefinition {
   readonly deployCooldown: number   // ms
   readonly description: string
   readonly tags?: readonly string[]
+  readonly collisionReaction?: CollisionReaction
 }
 
 // ============ 進化系統 ============

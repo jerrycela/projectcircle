@@ -16,4 +16,10 @@ export const goblin: MonsterDefinition = {
   deployCooldown: 1000,
   description: '靈活走位的近戰輸出，攻擊最弱敵人',
   tags: ['melee', 'dps', 'starter'],
+  collisionReaction: {
+    type: 'dodge',
+    knockbackDistance: 60,
+    invincibleDuration: 500,
+    cooldown: 3000,
+  },
 }
