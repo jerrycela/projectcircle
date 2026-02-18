@@ -2546,6 +2546,99 @@ export class BattlePhase implements Phase {
     })
   }
 
+  private showPicker(monsterId: string, cardWorldX: number): void {
+    this.hidePicker(true)
+
+    const runState = gameStore.getState().run
+    const instanceCount = runState.monsters.filter(m => m.monsterId === monsterId).length
+    const aliveAllies = this.units.filter(u => u.faction === 'ally' && u.alive).length
+    this.pickerMax = Math.min(instanceCount, Math.max(0, this.getEffectiveAllyLimit() - aliveAllies))
+
+    if (this.pickerMax <= 0) return
+
+    // pickerMax = 1：跳過滾輪直接瞄準
+    if (this.pickerMax === 1) {
+      this.pickerCount = 1
+      this.enterAimMode(monsterId)
+      return
+    }
+
+    this.pickerMode = true
+    this.pickerMonsterId = monsterId
+    this.pickerCount = this.pickerMax  // 預設全選
+
+    // 計算位置（卡片上方，防超出螢幕）
+    const panelY = ROOM_Y + ROOM_HEIGHT + 20
+    const pickerY = panelY - 52
+    const pickerWidth = 120
+    const clampedX = Phaser.Math.Clamp(
+      cardWorldX,
+      ROOM_X + pickerWidth / 2,
+      ROOM_X + ROOM_WIDTH - pickerWidth / 2
+    )
+
+    this.pickerContainer = this.scene.add.container(clampedX, pickerY)
+    this.pickerContainer.setDepth(20)
+    this.pickerContainer.setAlpha(0)
+    this.pickerContainer.setScale(0.9)
+
+    this.buildPickerUI()
+
+    // 進場動畫
+    this.scene.tweens.add({
+      targets: this.pickerContainer,
+      alpha: 1,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 150,
+      ease: 'Back.easeOut',
+    })
+
+    // 暗化其他卡片
+    for (const c of this.deployCards) {
+      if (c.monsterId !== monsterId) {
+        c.cdOverlay.setVisible(true)
+        c.cdOverlay.setAlpha(0.35)
+      }
+    }
+  }
+
+  private hidePicker(immediate = false): void {
+    if (!this.pickerMode && !this.pickerContainer) return
+
+    this.pickerMode = false
+    this.pickerMonsterId = null
+    this.pickerPrevText = null
+    this.pickerCurrText = null
+    this.pickerNextText = null
+
+    // 還原所有卡片暗化（依照 CD 狀態重設）
+    const now = this.scene.time.now
+    for (const c of this.deployCards) {
+      const onCD = now - c.lastDeployTime < c.cooldownMs
+      c.cdOverlay.setAlpha(0.6)
+      c.cdOverlay.setVisible(onCD)
+    }
+
+    if (this.pickerContainer) {
+      if (immediate) {
+        this.scene.tweens.killTweensOf(this.pickerContainer)
+        this.pickerContainer.destroy(true)
+        this.pickerContainer = null
+      } else {
+        this.scene.tweens.killTweensOf(this.pickerContainer)
+        const container = this.pickerContainer
+        this.pickerContainer = null
+        this.scene.tweens.add({
+          targets: container,
+          alpha: 0,
+          duration: 100,
+          onComplete: () => container.destroy(true),
+        })
+      }
+    }
+  }
+
   // ============ 數量選擇器 ============
 
   private buildPickerUI(): void {
