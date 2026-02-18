@@ -125,6 +125,7 @@ interface BattleUnit {
   isTaunting: boolean                     // 是否正在嘲諷中（避免重複嘲諷）
   isDodgeInvincible: boolean              // 閃避無敵中
   tauntTargetId: string | null            // 被嘲諷後強制追打的目標 id（enemy 用）
+  originalMoveSpeed: number               // push 減速前的原始速度（恢復用）
 }
 
 // ============ 部署面板 UI 資料結構 ============
@@ -1091,6 +1092,7 @@ export class BattlePhase implements Phase {
       isTaunting: false,
       isDodgeInvincible: false,
       tauntTargetId: null,
+      originalMoveSpeed: 0,
     }
   }
 
@@ -1170,6 +1172,7 @@ export class BattlePhase implements Phase {
       isTaunting: false,
       isDodgeInvincible: false,
       tauntTargetId: null,
+      originalMoveSpeed: 0,
     }
   }
 
@@ -1246,6 +1249,7 @@ export class BattlePhase implements Phase {
       isTaunting: false,
       isDodgeInvincible: false,
       tauntTargetId: null,
+      originalMoveSpeed: 0,
     }
   }
 
@@ -1495,6 +1499,7 @@ export class BattlePhase implements Phase {
   }
 
   private applyDamage(unit: BattleUnit, damage: number): void {
+    if (unit.isDodgeInvincible) return
     unit.hp = Math.max(0, unit.hp - damage)
 
     if (unit.hp <= 0) {
@@ -2663,7 +2668,7 @@ export class BattlePhase implements Phase {
           const impactDamage = Math.max(1, Math.floor(unit.atk * speedFactor))
           this.applyDamage(enemy, impactDamage)
           this.flashWhite(enemy.sprite)
-          this.applyCollisionReaction(unit, enemy)
+          if (enemy.alive) this.applyCollisionReaction(unit, enemy)
 
           // 重擊相機微震（傷害 >= 15 時觸發）
           if (impactDamage >= 15) {
@@ -2769,15 +2774,16 @@ export class BattlePhase implements Phase {
     const enemyBody = enemy.sprite.body as Phaser.Physics.Arcade.Body
     enemyBody.setVelocity(nx * reaction.pushForce * 8, ny * reaction.pushForce * 8)
 
-    // 減速
-    const originalSpeed = enemy.moveSpeed
-    enemy.moveSpeed = originalSpeed * (1 - reaction.slowPercent / 100)
+    // 減速（用 originalMoveSpeed 記錄真正的原始速度，避免多次疊加讀到減速後的值）
+    if (enemy.originalMoveSpeed === 0) enemy.originalMoveSpeed = enemy.moveSpeed
+    enemy.moveSpeed = enemy.originalMoveSpeed * (1 - reaction.slowPercent / 100)
     enemy.sprite.setTint(0xff6600)
 
     // 恢復
     this.scene.time.delayedCall(reaction.pushDuration, () => {
       if (enemy.alive && enemy.sprite.active) {
-        enemy.moveSpeed = originalSpeed
+        enemy.moveSpeed = enemy.originalMoveSpeed
+        enemy.originalMoveSpeed = 0
         enemy.sprite.clearTint()
         const b = enemy.sprite.body as Phaser.Physics.Arcade.Body
         b.setVelocity(0, 0)
@@ -2813,10 +2819,11 @@ export class BattlePhase implements Phase {
       e.sprite.setTint(0xff4444)
     }
 
-    // 嘲諷圈視覺
+    // 嘲諷圈視覺（加入 battleOverlayElements 以便戰鬥結束時清理）
     const tauntCircle = this.scene.add.circle(unit.sprite.x, unit.sprite.y, reaction.tauntRadius, 0xff0000, 0.1)
     tauntCircle.setStrokeStyle(2, 0xff0000, 0.6)
     tauntCircle.setDepth(5)
+    this.battleOverlayElements.push(tauntCircle)
     this.scene.tweens.add({ targets: tauntCircle, alpha: { from: 0, to: 1 }, duration: 200 })
 
     // 持續更新圓圈位置
@@ -3656,6 +3663,7 @@ export class BattlePhase implements Phase {
       isTaunting: false,
       isDodgeInvincible: false,
       tauntTargetId: null,
+      originalMoveSpeed: 0,
     }
   }
 
