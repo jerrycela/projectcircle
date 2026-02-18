@@ -250,6 +250,18 @@ export class BattlePhase implements Phase {
   private isBursting: boolean = false
   private burstCountBadge: Phaser.GameObjects.Container | null = null
 
+  // 數量選擇器
+  private pickerMode: boolean = false
+  private pickerMonsterId: string | null = null
+  private pickerCount: number = 1
+  private pickerMax: number = 1
+  private pickerContainer: Phaser.GameObjects.Container | null = null
+  private pickerStartX: number = 0
+  private pickerStartY: number = 0
+  private pickerPrevText: Phaser.GameObjects.Text | null = null
+  private pickerCurrText: Phaser.GameObjects.Text | null = null
+  private pickerNextText: Phaser.GameObjects.Text | null = null
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene
   }
