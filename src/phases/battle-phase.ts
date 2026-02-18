@@ -15,7 +15,7 @@
 
 import Phaser from 'phaser'
 import type { Phase } from './phase-manager'
-import type { HeroDefinition, MonsterDefinition, BattleWaveConfig, WaveDefinition, EvolutionDefinition } from '../data/schemas'
+import type { HeroDefinition, MonsterDefinition, BattleWaveConfig, WaveDefinition, EvolutionDefinition, DodgeReaction, PushReaction, TauntReaction } from '../data/schemas'
 import { DATA_CONSTANTS } from '../data/schemas'
 import type { UpdateAIResult, UnitAI } from '../systems/ai-system'
 import { createUnitAI, updateAI, AIState } from '../systems/ai-system'
@@ -124,6 +124,7 @@ interface BattleUnit {
   collisionReactionCooldownUntil: number  // 下次可觸發碰撞反應的時間（Date.now() 為基準，0 = 可觸發）
   isTaunting: boolean                     // 是否正在嘲諷中（避免重複嘲諷）
   isDodgeInvincible: boolean              // 閃避無敵中
+  tauntTargetId: string | null            // 被嘲諷後強制追打的目標 id（enemy 用）
 }
 
 // ============ 部署面板 UI 資料結構 ============
@@ -1089,6 +1090,7 @@ export class BattlePhase implements Phase {
       collisionReactionCooldownUntil: 0,
       isTaunting: false,
       isDodgeInvincible: false,
+      tauntTargetId: null,
     }
   }
 
@@ -1167,6 +1169,7 @@ export class BattlePhase implements Phase {
       collisionReactionCooldownUntil: 0,
       isTaunting: false,
       isDodgeInvincible: false,
+      tauntTargetId: null,
     }
   }
 
@@ -1242,6 +1245,7 @@ export class BattlePhase implements Phase {
       collisionReactionCooldownUntil: 0,
       isTaunting: false,
       isDodgeInvincible: false,
+      tauntTargetId: null,
     }
   }
 
@@ -1303,9 +1307,20 @@ export class BattlePhase implements Phase {
       if (unit.isLaunching) continue  // 發射中不受 AI 控制
 
       // 決定這個單位的敵方列表
-      const enemies = unit.faction === 'ally'
+      // 嘲諷：被嘲諷的敵人強制以 tauntTarget 排第一，讓 AI 優先選到它
+      let enemies = unit.faction === 'ally'
         ? aliveEnemies.map(e => ({ x: e.sprite.x, y: e.sprite.y, hp: e.hp }))
         : aliveAllies.map(e => ({ x: e.sprite.x, y: e.sprite.y, hp: e.hp }))
+
+      if (unit.faction === 'enemy' && unit.tauntTargetId !== null) {
+        const tauntTarget = aliveAllies.find(a => a.id === unit.tauntTargetId)
+        if (tauntTarget) {
+          const tauntEntry = { x: tauntTarget.sprite.x, y: tauntTarget.sprite.y, hp: tauntTarget.hp }
+          enemies = [tauntEntry, ...enemies.filter((_, i) => aliveAllies[i]?.id !== unit.tauntTargetId)]
+        } else {
+          unit.tauntTargetId = null
+        }
+      }
 
       // 攻擊範圍補償 body 半徑（物理碰撞將單位推開到 body 表面距離，
       // 多敵人同時碰撞會累積推力，需加上自身 body 半徑才能穩定進入攻擊）
@@ -2648,6 +2663,7 @@ export class BattlePhase implements Phase {
           const impactDamage = Math.max(1, Math.floor(unit.atk * speedFactor))
           this.applyDamage(enemy, impactDamage)
           this.flashWhite(enemy.sprite)
+          this.applyCollisionReaction(unit, enemy)
 
           // 重擊相機微震（傷害 >= 15 時觸發）
           if (impactDamage >= 15) {
@@ -2674,6 +2690,159 @@ export class BattlePhase implements Phase {
         }
       }
     }
+  }
+
+  // ============ 碰撞反應處理 ============
+
+  private applyCollisionReaction(unit: BattleUnit, enemy: BattleUnit): void {
+    // 找回基底怪物 id（進化後 definitionId 如 "goblin_captain"，fromMonsterId 才是 "goblin"）
+    // 實際上進化後 definitionId 就是 evolution.id，要透過 fromMonsterId 查回
+    let baseId = unit.definitionId
+    if (unit.evolution) {
+      baseId = unit.evolution.fromMonsterId
+    }
+    const monsterDef = DataRegistry.getMonsterById(baseId)
+    const reaction = monsterDef?.collisionReaction
+    if (!reaction) return
+
+    const now = Date.now()
+    if (now < unit.collisionReactionCooldownUntil) return
+
+    unit.collisionReactionCooldownUntil = now + reaction.cooldown
+
+    if (reaction.type === 'dodge') {
+      this.applyDodgeReaction(unit, enemy, reaction)
+    } else if (reaction.type === 'push') {
+      this.applyPushReaction(unit, enemy, reaction)
+    } else if (reaction.type === 'taunt') {
+      this.applyTauntReaction(unit, reaction)
+    }
+  }
+
+  private applyDodgeReaction(unit: BattleUnit, enemy: BattleUnit, reaction: DodgeReaction): void {
+    if (!unit.sprite.active) return
+
+    // 計算反彈方向（遠離敵人）
+    const dx = unit.sprite.x - enemy.sprite.x
+    const dy = unit.sprite.y - enemy.sprite.y
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
+    const nx = dx / len
+    const ny = dy / len
+
+    // 瞬間推離
+    const body = unit.sprite.body as Phaser.Physics.Arcade.Body
+    body.setVelocity(nx * reaction.knockbackDistance * 4, ny * reaction.knockbackDistance * 4)
+
+    // 200ms 後歸零速度
+    this.scene.time.delayedCall(200, () => {
+      if (unit.alive && unit.sprite.active) {
+        const b = unit.sprite.body as Phaser.Physics.Arcade.Body
+        b.setVelocity(0, 0)
+      }
+    })
+
+    // 無敵閃爍
+    unit.isDodgeInvincible = true
+    this.scene.tweens.add({
+      targets: unit.sprite,
+      alpha: { from: 0.3, to: 1.0 },
+      duration: reaction.invincibleDuration / 4,
+      yoyo: true,
+      repeat: 3,
+      onComplete: () => {
+        if (unit.sprite.active) unit.sprite.setAlpha(1)
+        unit.isDodgeInvincible = false
+      },
+    })
+  }
+
+  private applyPushReaction(unit: BattleUnit, enemy: BattleUnit, reaction: PushReaction): void {
+    if (!enemy.sprite.active) return
+
+    // 推擠方向（遠離 unit）
+    const dx = enemy.sprite.x - unit.sprite.x
+    const dy = enemy.sprite.y - unit.sprite.y
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
+    const nx = dx / len
+    const ny = dy / len
+
+    const enemyBody = enemy.sprite.body as Phaser.Physics.Arcade.Body
+    enemyBody.setVelocity(nx * reaction.pushForce * 8, ny * reaction.pushForce * 8)
+
+    // 減速
+    const originalSpeed = enemy.moveSpeed
+    enemy.moveSpeed = originalSpeed * (1 - reaction.slowPercent / 100)
+    enemy.sprite.setTint(0xff6600)
+
+    // 恢復
+    this.scene.time.delayedCall(reaction.pushDuration, () => {
+      if (enemy.alive && enemy.sprite.active) {
+        enemy.moveSpeed = originalSpeed
+        enemy.sprite.clearTint()
+        const b = enemy.sprite.body as Phaser.Physics.Arcade.Body
+        b.setVelocity(0, 0)
+      }
+    })
+  }
+
+  private applyTauntReaction(unit: BattleUnit, reaction: TauntReaction): void {
+    if (unit.isTaunting || !unit.sprite.active) return
+    unit.isTaunting = true
+
+    // 找範圍內最近的敵人（最多 maxTargets 個）
+    const taunted = this.units
+      .filter(u => u.faction === 'enemy' && u.alive)
+      .map(u => {
+        const dx = u.sprite.x - unit.sprite.x
+        const dy = u.sprite.y - unit.sprite.y
+        return { u, dist: Math.sqrt(dx * dx + dy * dy) }
+      })
+      .filter(({ dist }) => dist <= reaction.tauntRadius)
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, reaction.maxTargets)
+      .map(({ u }) => u)
+
+    if (taunted.length === 0) {
+      unit.isTaunting = false
+      return
+    }
+
+    // 標記嘲諷目標：設 tauntTargetId 指向 unit
+    for (const e of taunted) {
+      e.tauntTargetId = unit.id
+      e.sprite.setTint(0xff4444)
+    }
+
+    // 嘲諷圈視覺
+    const tauntCircle = this.scene.add.circle(unit.sprite.x, unit.sprite.y, reaction.tauntRadius, 0xff0000, 0.1)
+    tauntCircle.setStrokeStyle(2, 0xff0000, 0.6)
+    tauntCircle.setDepth(5)
+    this.scene.tweens.add({ targets: tauntCircle, alpha: { from: 0, to: 1 }, duration: 200 })
+
+    // 持續更新圓圈位置
+    const trackEvent = this.scene.time.addEvent({
+      delay: 50,
+      repeat: Math.floor(reaction.tauntDuration / 50),
+      callback: () => {
+        if (unit.sprite.active) tauntCircle.setPosition(unit.sprite.x, unit.sprite.y)
+      },
+    })
+
+    // 嘲諷結束
+    this.scene.time.delayedCall(reaction.tauntDuration, () => {
+      trackEvent.destroy()
+      this.scene.tweens.add({
+        targets: tauntCircle,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => tauntCircle.destroy(),
+      })
+      for (const e of taunted) {
+        if (e.alive && e.sprite.active) e.sprite.clearTint()
+        e.tauntTargetId = null
+      }
+      unit.isTaunting = false
+    })
   }
 
   // ============ 發射著陸判定 ============
@@ -3486,6 +3655,7 @@ export class BattlePhase implements Phase {
       collisionReactionCooldownUntil: 0,
       isTaunting: false,
       isDodgeInvincible: false,
+      tauntTargetId: null,
     }
   }
 
