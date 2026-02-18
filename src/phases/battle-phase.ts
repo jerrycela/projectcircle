@@ -2652,8 +2652,8 @@ export class BattlePhase implements Phase {
   private buildPickerUI(): void {
     if (!this.pickerContainer) return
 
-    const w = 120
-    const h = 44
+    const w = 140
+    const h = 56
 
     // 背景
     const bg = this.scene.add.graphics()
@@ -2664,9 +2664,9 @@ export class BattlePhase implements Phase {
     this.pickerContainer.add(bg)
 
     // 左側數字（前一個）
-    const prevText = this.scene.add.text(-38, 0, '', {
+    const prevText = this.scene.add.text(-44, 0, '', {
       fontSize: '14px',
-      color: '#888888',
+      color: '#666666',
       fontStyle: 'bold',
     })
     prevText.setOrigin(0.5)
@@ -2686,9 +2686,9 @@ export class BattlePhase implements Phase {
     this.pickerCurrText = currText
 
     // 右側數字（下一個）
-    const nextText = this.scene.add.text(38, 0, '', {
+    const nextText = this.scene.add.text(44, 0, '', {
       fontSize: '14px',
-      color: '#888888',
+      color: '#666666',
       fontStyle: 'bold',
     })
     nextText.setOrigin(0.5)
@@ -2696,12 +2696,29 @@ export class BattlePhase implements Phase {
     this.pickerNextText = nextText
 
     // 上方提示箭頭（↑ 向上拖曳瞄準）
-    const hintText = this.scene.add.text(0, -h / 2 - 12, '↑ 拖曳瞄準', {
-      fontSize: '10px',
-      color: '#aaaaaa',
+    const hintText = this.scene.add.text(0, -h / 2 - 14, '↑ 拖曳瞄準', {
+      fontSize: '12px',
+      color: '#cccccc',
     })
     hintText.setOrigin(0.5)
     this.pickerContainer.add(hintText)
+
+    // 左右方向指示（< >）
+    const leftArrow = this.scene.add.text(-w / 2 + 8, 0, '<', {
+      fontSize: '12px',
+      color: '#555555',
+      fontStyle: 'bold',
+    })
+    leftArrow.setOrigin(0.5)
+    this.pickerContainer.add(leftArrow)
+
+    const rightArrow = this.scene.add.text(w / 2 - 8, 0, '>', {
+      fontSize: '12px',
+      color: '#555555',
+      fontStyle: 'bold',
+    })
+    rightArrow.setOrigin(0.5)
+    this.pickerContainer.add(rightArrow)
 
     this.updatePickerDisplay()
   }
