@@ -3321,7 +3321,9 @@ export class BattlePhase implements Phase {
 
       const aliveAllies = this.units.filter(u => u.faction === 'ally' && u.alive).length
       const maxBurst = Math.max(0, this.getEffectiveAllyLimit() - aliveAllies)
-      const burstCount = Math.min(instances.length, maxBurst)
+      // 使用 picker 選擇的數量（pickerCount 已在 showPicker 時 clamp 到合法範圍）
+      // 若是 pickerMax=1 直接跳過 picker 進入瞄準，pickerCount 也已設為 1
+      const burstCount = Math.min(this.pickerCount, Math.min(instances.length, maxBurst))
 
       if (burstCount <= 0) {
         this.exitAimMode()
