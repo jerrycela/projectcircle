@@ -442,3 +442,89 @@ export function createProjectileFX(
     },
   });
 }
+
+/**
+ * 治療心形粒子效果
+ * 小心形符號向上飄散，搭配綠色調
+ */
+export function spawnHeartParticles(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  count: number = 4
+): void {
+  for (let i = 0; i < count; i++) {
+    const offsetX = (Math.random() - 0.5) * 30;
+    const startY = y + (Math.random() - 0.5) * 10;
+    const color = i % 2 === 0 ? '#44ff44' : '#88ffaa';
+
+    const heart = scene.add.text(x + offsetX, startY, '♥', {
+      fontSize: `${10 + Math.random() * 6}px`,
+      color,
+      fontFamily: 'monospace',
+    });
+    heart.setOrigin(0.5);
+    heart.setAlpha(0.9);
+
+    scene.tweens.add({
+      targets: heart,
+      y: startY - 25 - Math.random() * 20,
+      x: x + offsetX + (Math.random() - 0.5) * 15,
+      alpha: 0,
+      scaleX: 0.4,
+      scaleY: 0.4,
+      duration: 500 + Math.random() * 300,
+      ease: 'Quad.easeOut',
+      onComplete: () => heart.destroy(),
+    });
+  }
+}
+
+/**
+ * 像素爆散死亡特效
+ * 方形像素碎片向外爆散，模擬像素藝術風格的破碎效果
+ */
+export function spawnPixelBurst(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  color: number = 0xffffff,
+  count: number = 8
+): void {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 / count) * i + (Math.random() - 0.5) * 0.5;
+    const speed = 30 + Math.random() * 50;
+    const targetX = x + Math.cos(angle) * speed;
+    const targetY = y + Math.sin(angle) * speed;
+    const size = 2 + Math.random() * 3;
+
+    // 方形像素碎片（核心像素藝術風格）
+    const pixel = scene.add.rectangle(x, y, size, size, color, 0.9);
+    pixel.setAngle(Math.random() * 360);
+
+    scene.tweens.add({
+      targets: pixel,
+      x: targetX,
+      y: targetY,
+      alpha: 0,
+      angle: pixel.angle + (Math.random() - 0.5) * 180,
+      scaleX: 0.2,
+      scaleY: 0.2,
+      duration: 300 + Math.random() * 200,
+      ease: 'Quad.easeOut',
+      onComplete: () => pixel.destroy(),
+    });
+  }
+
+  // 中心閃光
+  const flash = scene.add.circle(x, y, 6, 0xffffff, 0.7);
+  scene.tweens.add({
+    targets: flash,
+    scaleX: 2.5,
+    scaleY: 2.5,
+    alpha: 0,
+    duration: 200,
+    ease: 'Quad.easeOut',
+    onComplete: () => flash.destroy(),
+  });
+}

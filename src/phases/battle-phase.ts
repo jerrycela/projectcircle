@@ -44,6 +44,8 @@ import {
   drawEnhancedHPBar,
   flashUnit,
   spawnHitParticles,
+  spawnHeartParticles,
+  spawnPixelBurst,
   createProjectileFX,
   drawPanel,
   createTextBadge,
@@ -770,7 +772,7 @@ export class BattlePhase implements Phase {
       this.scene,
       cx, cy,
       '下一波即將來臨...',
-      { fontSize: '20px', color: '#ffcc44', bgAlpha: 0.7, paddingX: 18, paddingY: 8 }
+      { fontSize: '24px', color: '#ffcc44', bgAlpha: 0.7, paddingX: 18, paddingY: 8 }
     )
 
     // 文字閃爍 + 輕微縮放
@@ -790,20 +792,21 @@ export class BattlePhase implements Phase {
       const delay = (totalSec - s) * 1000
       this.scene.time.delayedCall(delay, () => {
         const numText = this.scene.add.text(cx, cy + 34, `${s}`, {
-          fontSize: '32px', color: '#ffdd44', fontStyle: 'bold',
-          stroke: '#000000', strokeThickness: 4,
+          fontSize: '48px', color: '#ffdd44', fontStyle: 'bold',
+          stroke: '#000000', strokeThickness: 6,
         })
         numText.setOrigin(0.5)
         numText.setAlpha(0)
         this.scene.tweens.add({
           targets: numText,
           alpha: { from: 1, to: 0 },
-          scaleX: { from: 1.5, to: 0.7 },
-          scaleY: { from: 1.5, to: 0.7 },
+          scaleX: { from: 2.0, to: 0.8 },
+          scaleY: { from: 2.0, to: 0.8 },
           duration: 800,
           ease: 'Quad.easeIn',
           onComplete: () => numText.destroy(),
         })
+        this.scene.cameras.main.shake(80, 0.004)
       })
     }
 
@@ -1484,7 +1487,7 @@ export class BattlePhase implements Phase {
     // 傷害數字
     const isRanged = attacker.aiType === 'ranged_stationary'
     const dmgColor = isRanged ? '#88bbff' : '#ff4444'
-    const dmgSize = damage >= 15 ? '20px' : '14px'
+    const dmgSize = damage >= 15 ? '24px' : '16px'
     const dmgText = this.scene.add.text(
       target.sprite.x, target.sprite.y - 15,
       `-${damage}`,
@@ -1492,13 +1495,15 @@ export class BattlePhase implements Phase {
         stroke: '#000000', strokeThickness: 3 }
     )
     dmgText.setOrigin(0.5)
-    const ease = damage >= 15 ? 'Back.easeOut' : 'Quad.easeOut'
+    dmgText.setScale(1.5)
     this.scene.tweens.add({
       targets: dmgText,
-      y: dmgText.y - 30,
+      y: dmgText.y - 40,
       alpha: 0,
+      scaleX: 1,
+      scaleY: 1,
       duration: 700,
-      ease,
+      ease: 'Back.easeOut',
       onComplete: () => dmgText.destroy(),
     })
   }
@@ -2170,6 +2175,9 @@ export class BattlePhase implements Phase {
         onComplete: () => ring.destroy(),
       })
     }
+
+    // 像素爆散
+    spawnPixelBurst(this.scene, x, y, color, unit.evolution !== null ? 10 : 6)
   }
 
   private spawnLandingVFX(x: number, y: number): void {
@@ -2929,14 +2937,17 @@ export class BattlePhase implements Phase {
           const dmgText = this.scene.add.text(
             enemy.sprite.x, enemy.sprite.y - 15,
             `-${impactDamage}`,
-            { fontSize: '20px', color: '#ffaa44', fontStyle: 'bold',
+            { fontSize: '24px', color: '#ffaa44', fontStyle: 'bold',
               stroke: '#000000', strokeThickness: 3 }
           )
           dmgText.setOrigin(0.5)
+          dmgText.setScale(1.5)
           this.scene.tweens.add({
             targets: dmgText,
-            y: dmgText.y - 35,
+            y: dmgText.y - 45,
             alpha: 0,
+            scaleX: 1,
+            scaleY: 1,
             duration: 800,
             ease: 'Back.easeOut',
             onComplete: () => dmgText.destroy(),
@@ -3684,15 +3695,19 @@ export class BattlePhase implements Phase {
       })
     }
 
+    // 心形粒子
+    spawnHeartParticles(this.scene, lowestUnit.sprite.x, lowestUnit.sprite.y - 10, 3)
+
     // +HP 數字上浮
     const healText = this.scene.add.text(
       lowestUnit.sprite.x, lowestUnit.sprite.y - 10,
-      `+${healAmount}`, { fontSize: '12px', color: '#44ff44', fontFamily: 'monospace' }
+      `+${healAmount}`, { fontSize: '16px', color: '#44ff44', fontFamily: 'monospace',
+        fontStyle: 'bold', stroke: '#000000', strokeThickness: 2 }
     )
     healText.setOrigin(0.5)
     this.scene.tweens.add({
       targets: healText,
-      y: healText.y - 20,
+      y: healText.y - 28,
       alpha: 0,
       duration: 600,
       ease: 'Quad.easeOut',
