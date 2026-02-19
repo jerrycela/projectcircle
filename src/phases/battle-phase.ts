@@ -36,6 +36,7 @@ import {
   ENEMY_SPAWN_INTERVAL,
   UI_TEXT,
   UI_ACCENT,
+  UI_BORDER,
   UI_SUCCESS,
   UI_DANGER,
 } from '../config/constants'
@@ -54,10 +55,10 @@ import { TEXTURE_KEYS, UNIT_TEXTURE_MAP, EVOLUTION_TINTS } from '../utils/textur
 const ROOM_X = (GAME_WIDTH - ROOM_WIDTH) / 2
 const ROOM_Y = 20
 
-// 雙發射台位置（左下 + 右下，地圖底部對稱）
+// 雙發射台位置（左下 + 右下，地圖內部下方區域對稱）
 const LAUNCH_PADS: Array<{ x: number; y: number }> = [
-  { x: ROOM_X + ROOM_WIDTH * 0.25, y: ROOM_Y + ROOM_HEIGHT - 15 },
-  { x: ROOM_X + ROOM_WIDTH * 0.75, y: ROOM_Y + ROOM_HEIGHT - 15 },
+  { x: ROOM_X + ROOM_WIDTH * 0.25, y: ROOM_Y + ROOM_HEIGHT * 0.82 },
+  { x: ROOM_X + ROOM_WIDTH * 0.75, y: ROOM_Y + ROOM_HEIGHT * 0.82 },
 ]
 const LAUNCH_PAD_RADIUS = 18
 
@@ -206,6 +207,7 @@ export class BattlePhase implements Phase {
   // 全滅緩衝計時
   private allDeadTimer: number = 0
   private readonly ALL_DEAD_BUFFER = 3000  // 3 秒
+  private launchCounts: Record<string, number> = {}
 
   // 金幣追蹤
   private goldEarned: number = 0
@@ -402,6 +404,7 @@ export class BattlePhase implements Phase {
     this.aimStartPoint = null
     this.allDeadTimer = 0
     this.goldEarned = 0
+    this.launchCounts = {}
     this.battleEnded = false
 
     // Physics collider
@@ -753,7 +756,7 @@ export class BattlePhase implements Phase {
     // 暗化帶（ProjectDK 波次公告橫幅風格）
     const band = this.scene.add.rectangle(
       ROOM_X + ROOM_WIDTH / 2, cy,
-      ROOM_WIDTH, 60, 0x000000, 0.6
+      ROOM_WIDTH, 70, 0x000000, 0.65
     )
     band.setAlpha(0)
     this.scene.tweens.add({
@@ -990,6 +993,9 @@ export class BattlePhase implements Phase {
 
     // CD 由 pointerup（單發）或 processBurstQueue（連射最後一隻）設定
     // 不在此處更新 lastDeployTime
+
+    // 記錄本場已發射數量（不從 run.monsters 移除，保留 XP 追蹤）
+    this.launchCounts[monsterId] = (this.launchCounts[monsterId] || 0) + 1
 
     eventBus.emit({ type: 'MONSTER_DEPLOYED', monsterId, slotIndex: -1 })
   }
@@ -1478,7 +1484,7 @@ export class BattlePhase implements Phase {
     // 傷害數字
     const isRanged = attacker.aiType === 'ranged_stationary'
     const dmgColor = isRanged ? '#88bbff' : '#ff4444'
-    const dmgSize = damage >= 15 ? '16px' : '12px'
+    const dmgSize = damage >= 15 ? '20px' : '14px'
     const dmgText = this.scene.add.text(
       target.sprite.x, target.sprite.y - 15,
       `-${damage}`,
@@ -1489,7 +1495,7 @@ export class BattlePhase implements Phase {
     const ease = damage >= 15 ? 'Back.easeOut' : 'Quad.easeOut'
     this.scene.tweens.add({
       targets: dmgText,
-      y: dmgText.y - 25,
+      y: dmgText.y - 30,
       alpha: 0,
       duration: 700,
       ease,
@@ -2303,7 +2309,7 @@ export class BattlePhase implements Phase {
   private createDeployPanel(): void {
     const panelY = ROOM_Y + ROOM_HEIGHT + 20
     const panelWidth = ROOM_WIDTH
-    const panelHeight = 80
+    const panelHeight = 90
 
     const container = this.scene.add.container(ROOM_X, panelY)
     this.deployPanelContainer = container
@@ -2315,8 +2321,8 @@ export class BattlePhase implements Phase {
 
     // 取得玩家擁有的怪物列表
     const ownedMonsters = this.getOwnedMonsterIds()
-    const cardWidth = 80
-    const cardGap = 10
+    const cardWidth = 100
+    const cardGap = 12
     const totalWidth = ownedMonsters.length * cardWidth + (ownedMonsters.length - 1) * cardGap
     const startX = (panelWidth - totalWidth) / 2
 
@@ -2373,11 +2379,11 @@ export class BattlePhase implements Phase {
     const evo = this.resolveEvolution(monsterDef.id)
     const cardDefId = evo?.id ?? monsterDef.id
     const cardTexKey = UNIT_TEXTURE_MAP[cardDefId] ?? UNIT_TEXTURE_MAP[monsterDef.id] ?? TEXTURE_KEYS.GOBLIN
-    const cardIcon = this.scene.add.sprite(x + 18, y + height / 2 - 4, cardTexKey)
-    cardIcon.setScale(2.0)
+    const cardIcon = this.scene.add.sprite(x + 22, y + height / 2 - 4, cardTexKey)
+    cardIcon.setScale(2.5)
     container.add(cardIcon)
     // 圖示底部光暈
-    const iconGlow = this.scene.add.circle(x + 18, y + height / 2 - 4, 14, UI_ACCENT, 0.1)
+    const iconGlow = this.scene.add.circle(x + 22, y + height / 2 - 4, 16, UI_ACCENT, 0.12)
     container.add(iconGlow)
     container.sendToBack(iconGlow)
 
@@ -2392,7 +2398,7 @@ export class BattlePhase implements Phase {
       const routeLabel = this.scene.add.text(
         x + width - 6, y + 4,
         evo.path.route,
-        { fontSize: '9px', color: `#${evoColor.toString(16).padStart(6, '0')}`, fontStyle: 'bold' }
+        { fontSize: '10px', color: `#${evoColor.toString(16).padStart(6, '0')}`, fontStyle: 'bold' }
       )
       routeLabel.setOrigin(0.5)
       container.add(routeLabel)
@@ -2401,10 +2407,10 @@ export class BattlePhase implements Phase {
     // 名稱文字（右偏以容納圖示，帶描邊 — ProjectDK 風格）
     const displayName = evo ? evo.path.name : monsterDef.name
     const nameText = this.scene.add.text(
-      x + width / 2 + 10, y + height / 2,
+      x + width / 2 + 12, y + height / 2,
       displayName,
       {
-        fontSize: '13px',
+        fontSize: '14px',
         color: `#${UI_TEXT.toString(16)}`,
         fontStyle: 'bold',
         align: 'center',
@@ -2418,10 +2424,10 @@ export class BattlePhase implements Phase {
     // 數量角標（右下角）
     const instanceCount = gameStore.getState().run.monsters.filter(m => m.monsterId === monsterDef.id).length
     const countText = this.scene.add.text(
-      x + width - 6, y + height - 6,
+      x + width - 8, y + height - 8,
       `x${instanceCount}`,
       {
-        fontSize: '11px',
+        fontSize: '13px',
         color: '#ffdd55',
         fontStyle: 'bold',
         stroke: '#000000',
@@ -2457,10 +2463,9 @@ export class BattlePhase implements Phase {
     const now = this.scene.time.now
     if (now - card.lastDeployTime < card.cooldownMs) return
 
-    // 若在瞄準模式，退出
+    // 若在瞄準模式，退出後繼續處理（不 return，讓玩家一鍵切換到新卡片）
     if (this.aimMode) {
       this.exitAimMode()
-      return
     }
 
     // Toggle：點同一張卡片關閉 picker
@@ -2479,6 +2484,7 @@ export class BattlePhase implements Phase {
   private updateDeployPanel(time: number): void {
     const aliveAllies = this.units.filter(u => u.faction === 'ally' && u.alive)
     const isFull = aliveAllies.length >= this.getEffectiveAllyLimit()
+    const runMonsters = gameStore.getState().run.monsters
 
     for (const card of this.deployCards) {
       const cdRemaining = card.cooldownMs - (time - card.lastDeployTime)
@@ -2503,6 +2509,10 @@ export class BattlePhase implements Phase {
         card.readyLine.lineStyle(2, UI_ACCENT, 1)
         card.readyLine.lineBetween(cx + 2, cy + ch, cx + cw - 2, cy + ch)
       }
+
+      // 更新數量角標（Fix B）
+      const currentCount = runMonsters.filter(m => m.monsterId === card.monsterId).length - (this.launchCounts[card.monsterId] || 0)
+      card.countText.setText(`x${currentCount}`)
     }
   }
 
@@ -2596,7 +2606,7 @@ export class BattlePhase implements Phase {
     this.hidePicker(true)
 
     const runState = gameStore.getState().run
-    const instanceCount = runState.monsters.filter(m => m.monsterId === monsterId).length
+    const instanceCount = runState.monsters.filter(m => m.monsterId === monsterId).length - (this.launchCounts[monsterId] || 0)
     const aliveAllies = this.units.filter(u => u.faction === 'ally' && u.alive).length
     this.pickerMax = Math.min(instanceCount, Math.max(0, this.getEffectiveAllyLimit() - aliveAllies))
 
@@ -2698,16 +2708,18 @@ export class BattlePhase implements Phase {
 
     // 背景
     const bg = this.scene.add.graphics()
-    bg.fillStyle(0x1a1a2e, 0.92)
+    bg.fillStyle(0x1a1428, 0.95)
     bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8)
-    bg.lineStyle(1, UI_ACCENT, 0.8)
+    bg.lineStyle(2, UI_BORDER, 0.9)
     bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8)
     this.pickerContainer.add(bg)
 
     // 提示文字（上方）
-    const hintText = this.scene.add.text(0, -h / 2 - 14, '選擇數量 → 按發射台射出', {
-      fontSize: '11px',
-      color: '#aaaaaa',
+    const hintText = this.scene.add.text(0, -h / 2 - 16, '選擇數量 → 按發射台射出', {
+      fontSize: '14px',
+      color: '#a8a0b8',
+      stroke: '#000000',
+      strokeThickness: 2,
     })
     hintText.setOrigin(0.5)
     this.pickerContainer.add(hintText)
@@ -2719,7 +2731,7 @@ export class BattlePhase implements Phase {
 
     const minusLabel = this.scene.add.text(-w / 2 + btnW / 2, 0, '−', {
       fontSize: '24px',
-      color: '#aaaaaa',
+      color: '#a8a0b8',
       fontStyle: 'bold',
     })
     minusLabel.setOrigin(0.5)
@@ -2732,12 +2744,12 @@ export class BattlePhase implements Phase {
         this.updatePickerDisplay()
       }
     })
-    minusZone.on('pointerover', () => minusLabel.setColor('#ffffff'))
-    minusZone.on('pointerout', () => minusLabel.setColor('#aaaaaa'))
+    minusZone.on('pointerover', () => minusLabel.setColor('#f0e8d8'))
+    minusZone.on('pointerout', () => minusLabel.setColor('#a8a0b8'))
 
     // 中央數字（當前）
     const currText = this.scene.add.text(0, 0, `${this.pickerCount}`, {
-      fontSize: '22px',
+      fontSize: '24px',
       color: '#ffffff',
       fontStyle: 'bold',
       stroke: '#000000',
@@ -2754,7 +2766,7 @@ export class BattlePhase implements Phase {
 
     const plusLabel = this.scene.add.text(w / 2 - btnW / 2, 0, '+', {
       fontSize: '24px',
-      color: '#aaaaaa',
+      color: '#a8a0b8',
       fontStyle: 'bold',
     })
     plusLabel.setOrigin(0.5)
@@ -2767,12 +2779,12 @@ export class BattlePhase implements Phase {
         this.updatePickerDisplay()
       }
     })
-    plusZone.on('pointerover', () => plusLabel.setColor('#ffffff'))
-    plusZone.on('pointerout', () => plusLabel.setColor('#aaaaaa'))
+    plusZone.on('pointerover', () => plusLabel.setColor('#f0e8d8'))
+    plusZone.on('pointerout', () => plusLabel.setColor('#a8a0b8'))
 
     // 分隔線
     const divGfx = this.scene.add.graphics()
-    divGfx.lineStyle(1, 0x333355, 0.8)
+    divGfx.lineStyle(1, 0x6a5acd, 0.5)
     divGfx.lineBetween(-w / 2 + btnW, -h / 2 + 4, -w / 2 + btnW, h / 2 - 4)
     divGfx.lineBetween(w / 2 - btnW, -h / 2 + 4, w / 2 - btnW, h / 2 - 4)
     this.pickerContainer.add(divGfx)
@@ -2917,13 +2929,13 @@ export class BattlePhase implements Phase {
           const dmgText = this.scene.add.text(
             enemy.sprite.x, enemy.sprite.y - 15,
             `-${impactDamage}`,
-            { fontSize: '16px', color: '#ffaa44', fontStyle: 'bold',
+            { fontSize: '20px', color: '#ffaa44', fontStyle: 'bold',
               stroke: '#000000', strokeThickness: 3 }
           )
           dmgText.setOrigin(0.5)
           this.scene.tweens.add({
             targets: dmgText,
-            y: dmgText.y - 30,
+            y: dmgText.y - 35,
             alpha: 0,
             duration: 800,
             ease: 'Back.easeOut',
@@ -3266,7 +3278,7 @@ export class BattlePhase implements Phase {
       const endY = activePad.y + Math.sin(launchAngle) * lineLen
 
       // 虛線效果
-      this.aimLine.lineStyle(2, 0xffcc44, 0.8)
+      this.aimLine.lineStyle(3, 0xffcc44, 0.9)
       const segments = 8
       for (let i = 0; i < segments; i++) {
         if (i % 2 === 0) {
@@ -3282,7 +3294,7 @@ export class BattlePhase implements Phase {
       }
 
       // 箭頭
-      const arrowSize = 6
+      const arrowSize = 10
       this.aimLine.lineBetween(
         endX, endY,
         endX - Math.cos(launchAngle - 0.4) * arrowSize,
@@ -3296,7 +3308,7 @@ export class BattlePhase implements Phase {
 
       // 力道色彩指示
       const powerColor = power > 0.7 ? 0xff4444 : power > 0.4 ? 0xffcc44 : 0x44ff44
-      this.aimLine.lineStyle(3, powerColor, 0.6)
+      this.aimLine.lineStyle(3, powerColor, 0.8)
       this.aimLine.strokeCircle(activePad.x, activePad.y, LAUNCH_PAD_RADIUS + 2)
 
       // 力道百分比文字
@@ -3304,7 +3316,7 @@ export class BattlePhase implements Phase {
       const colorHex = powerColor === 0xff4444 ? '#ff4444' : powerColor === 0xffcc44 ? '#ffcc44' : '#44ff44'
       if (!this.aimPowerText) {
         this.aimPowerText = this.scene.add.text(activePad.x, activePad.y + LAUNCH_PAD_RADIUS + 12, '', {
-          fontSize: '12px', fontStyle: 'bold',
+          fontSize: '14px', fontStyle: 'bold',
           stroke: '#000000', strokeThickness: 2,
         })
         this.aimPowerText.setOrigin(0.5)

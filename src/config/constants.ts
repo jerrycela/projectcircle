@@ -22,30 +22,30 @@ export const EVOLUTION_XP_THRESHOLD = 30;
 export const WAVE_INTERVAL = 3000; // ms
 export const ENEMY_SPAWN_INTERVAL = 1000; // ms
 
-// === 色彩體系（DW3 地牢風格） ===
-// 我方（怪物）- 冷灰藍調
-export const ALLY_COLOR = 0x4a7a8a;
-export const ALLY_OUTLINE = 0x6a9aaa;
-export const ALLY_DARK = 0x2a5a6a;
-export const ALLY_HIGHLIGHT = 0x8abaca;
+// === 色彩體系（像素藝術風格） ===
+// 我方（怪物）- 明亮友方藍
+export const ALLY_COLOR = 0x55bbdd;
+export const ALLY_OUTLINE = 0x77ddff;
+export const ALLY_DARK = 0x337799;
+export const ALLY_HIGHLIGHT = 0x99eeff;
 
-// 敵方（冒險者）- 暗金褐調
-export const ENEMY_COLOR = 0xb89a6a;
-export const ENEMY_OUTLINE = 0xd4b888;
-export const ENEMY_DARK = 0x8a7a4a;
-export const ENEMY_HIGHLIGHT = 0xe8d0a0;
+// 敵方（冒險者）- 明亮敵方橙
+export const ENEMY_COLOR = 0xdd8844;
+export const ENEMY_OUTLINE = 0xffaa66;
+export const ENEMY_DARK = 0xaa6622;
+export const ENEMY_HIGHLIGHT = 0xffcc88;
 
-// UI 色彩
-export const UI_BG = 0x0c0c14;
-export const UI_PANEL = 0x16161e;
-export const UI_BORDER = 0x3a3a4e;
-export const UI_BORDER_LIGHT = 0x5a5a6e;
-export const UI_TEXT = 0xeeeeee;
-export const UI_TEXT_DIM = 0x888899;
-export const UI_ACCENT = 0x5588aa;
-export const UI_GOLD = 0xd4aa44;
-export const UI_DANGER = 0xcc4444;
-export const UI_SUCCESS = 0x44aa66;
+// UI 色彩（像素藝術風格 — 暖紫色調）
+export const UI_BG = 0x1a1428;
+export const UI_PANEL = 0x221a30;
+export const UI_BORDER = 0x6a5acd;
+export const UI_BORDER_LIGHT = 0x8a7ae8;
+export const UI_TEXT = 0xf0e8d8;
+export const UI_TEXT_DIM = 0xa8a0b8;
+export const UI_ACCENT = 0xffaa33;
+export const UI_GOLD = 0xffd700;
+export const UI_DANGER = 0xff5555;
+export const UI_SUCCESS = 0x55dd88;
 
 // 房間環境色
 export const ROOM_FLOOR = 0x1a1a22;

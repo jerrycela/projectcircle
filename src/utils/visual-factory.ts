@@ -146,8 +146,8 @@ export function createRoomGraphics(
 // ============ DW3 共用視覺工具 ============
 
 /**
- * 繪製多層面板（參考 ProjectDK 玻璃質感）
- * 4 層結構：暗色背景 → 外邊框 → 頂部高光 → 底部陰影
+ * 繪製多層面板（像素藝術風格）
+ * 5 層結構：陰影 → 純色背景 → 實色邊框 → 頂部高光 → 底部暗線
  */
 export function drawPanel(
   graphics: Phaser.GameObjects.Graphics,
@@ -158,31 +158,27 @@ export function drawPanel(
   bgAlpha: number = 0.7,
   cornerRadius: number = 6
 ): void {
-  // Layer 1: 底部陰影（偏移 2px，營造浮起感）
-  graphics.fillStyle(0x000000, bgAlpha * 0.3);
+  // Layer 1: 底部陰影（偏移 2px）
+  graphics.fillStyle(0x000000, bgAlpha * 0.4);
   graphics.fillRoundedRect(x + 1, y + 2, width, height, cornerRadius);
 
-  // Layer 2: 主背景填充
+  // Layer 2: 主背景填充（純色）
   graphics.fillStyle(UI_BG, bgAlpha);
   graphics.fillRoundedRect(x, y, width, height, cornerRadius);
 
-  // Layer 3: 內部漸層疊加（上半部分略亮，模擬光照）
-  graphics.fillStyle(0x222233, bgAlpha * 0.4);
-  graphics.fillRoundedRect(x + 1, y + 1, width - 2, Math.floor(height * 0.4), cornerRadius);
-
-  // Layer 4: 外邊框（主邊框）
-  graphics.lineStyle(1.5, UI_BORDER, 0.9);
+  // Layer 3: 2px 實色邊框（像素風核心特徵）
+  graphics.lineStyle(2, UI_BORDER, 0.9);
   graphics.strokeRoundedRect(x, y, width, height, cornerRadius);
 
-  // Layer 5: 頂部高光線（玻璃效果 — ProjectDK 核心手法）
-  graphics.lineStyle(1, UI_BORDER_LIGHT, 0.35);
+  // Layer 4: 頂部 1px 高光線
+  graphics.lineStyle(1, UI_BORDER_LIGHT, 0.5);
   graphics.beginPath();
   graphics.moveTo(x + cornerRadius, y + 1);
   graphics.lineTo(x + width - cornerRadius, y + 1);
   graphics.strokePath();
 
-  // Layer 6: 底部暗線（深度感）
-  graphics.lineStyle(1, 0x000000, 0.4);
+  // Layer 5: 底部 1px 暗線
+  graphics.lineStyle(1, 0x0a0810, 0.6);
   graphics.beginPath();
   graphics.moveTo(x + cornerRadius, y + height - 1);
   graphics.lineTo(x + width - cornerRadius, y + height - 1);

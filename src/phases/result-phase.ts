@@ -187,7 +187,9 @@ export class ResultPhase implements Phase {
         duration: 400,
         ease: 'Quad.easeOut',
         onUpdate: () => {
-          goldText.setText(`+${Math.floor(counter.val)}`)
+          if (goldText.active) {
+            goldText.setText(`+${Math.floor(counter.val)}`)
+          }
         },
       })
     }
