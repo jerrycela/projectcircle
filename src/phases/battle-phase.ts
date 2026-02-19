@@ -140,6 +140,7 @@ interface DeployCard {
   cdOverlay: Phaser.GameObjects.Rectangle
   nameText: Phaser.GameObjects.Text
   readyLine: Phaser.GameObjects.Graphics
+  countText: Phaser.GameObjects.Text
 }
 
 // ============ 房間加成資料結構 ============
@@ -2411,6 +2412,22 @@ export class BattlePhase implements Phase {
     nameText.setOrigin(0.5)
     container.add(nameText)
 
+    // 數量角標（右下角）
+    const instanceCount = gameStore.getState().run.monsters.filter(m => m.monsterId === monsterDef.id).length
+    const countText = this.scene.add.text(
+      x + width - 6, y + height - 6,
+      `x${instanceCount}`,
+      {
+        fontSize: '11px',
+        color: '#ffdd55',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 2,
+      }
+    )
+    countText.setOrigin(1, 1)
+    container.add(countText)
+
     const card: DeployCard = {
       monsterId: monsterDef.id,
       name: displayName,
@@ -2421,6 +2438,7 @@ export class BattlePhase implements Phase {
       cdOverlay,
       nameText,
       readyLine,
+      countText,
     }
 
     cardBg.on('pointerup', () => {

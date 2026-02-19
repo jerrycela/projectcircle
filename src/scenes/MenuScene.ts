@@ -221,17 +221,28 @@ export class MenuScene extends Phaser.Scene {
         ease: 'Back.easeOut',
       })
 
-      // Initialize run state with starter monster (goblin only)
-      // Skeleton and ogre are unlocked through room combos
-      const goblin = DataRegistry.getMonsterById('goblin')
-      const monsters = goblin ? [{
-        monsterId: goblin.id,
-        currentHP: goblin.stats.hp,
-        maxHP: goblin.stats.hp,
-        currentXP: 0,
-        maxXP: EVOLUTION_XP_THRESHOLD,
-        slotIndex: -1,
-      }] : []
+      // Initialize run state with 5 of each monster type for testing
+      const STARTER_COUNT = 5
+      const monsters: Array<{
+        monsterId: string
+        currentHP: number
+        maxHP: number
+        currentXP: number
+        maxXP: number
+        slotIndex: number
+      }> = []
+      for (const def of DataRegistry.getAllMonsters()) {
+        for (let i = 0; i < STARTER_COUNT; i++) {
+          monsters.push({
+            monsterId: def.id,
+            currentHP: def.stats.hp,
+            maxHP: def.stats.hp,
+            currentXP: 0,
+            maxXP: EVOLUTION_XP_THRESHOLD,
+            slotIndex: -1,
+          })
+        }
+      }
 
       gameStore.dispatch(state => ({
         ...state,
