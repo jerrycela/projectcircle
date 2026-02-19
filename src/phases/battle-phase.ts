@@ -256,11 +256,8 @@ export class BattlePhase implements Phase {
   private pickerCount: number = 1
   private pickerMax: number = 1
   private pickerContainer: Phaser.GameObjects.Container | null = null
-  private pickerStartX: number = 0
-  private pickerStartY: number = 0
-  private pickerPrevText: Phaser.GameObjects.Text | null = null
   private pickerCurrText: Phaser.GameObjects.Text | null = null
-  private pickerNextText: Phaser.GameObjects.Text | null = null
+  private launchPadHighlight: Phaser.GameObjects.Graphics | null = null
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
@@ -2568,6 +2565,20 @@ export class BattlePhase implements Phase {
       repeat: -1,
       ease: 'Sine.easeInOut',
     })
+
+    // 高亮圈（pickerOpen 時顯示，預設隱藏）
+    const hl = this.scene.add.graphics()
+    hl.lineStyle(3, 0x44ddff, 0.9)
+    hl.strokeCircle(LAUNCH_PAD_X, LAUNCH_PAD_Y, LAUNCH_PAD_RADIUS + 8)
+    hl.setVisible(false)
+    this.launchPadHighlight = hl
+    this.scene.tweens.add({
+      targets: hl,
+      alpha: { from: 0.5, to: 1.0 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+    })
   }
 
   // ============ 數量選擇器 ============
@@ -2627,6 +2638,9 @@ export class BattlePhase implements Phase {
         c.cdOverlay.setAlpha(0.35)
       }
     }
+
+    // 顯示發射台高亮，提示玩家可點擊
+    if (this.launchPadHighlight) this.launchPadHighlight.setVisible(true)
   }
 
   private hidePicker(immediate = false): void {
@@ -2634,9 +2648,8 @@ export class BattlePhase implements Phase {
 
     this.pickerMode = false
     this.pickerMonsterId = null
-    this.pickerPrevText = null
     this.pickerCurrText = null
-    this.pickerNextText = null
+    if (this.launchPadHighlight) this.launchPadHighlight.setVisible(false)
     // pickerCount 刻意不在此重設：showPicker 每次開啟時會重新計算並覆蓋它
     // （pickerMax=1 直接跳 enterAimMode 的路徑也已在 showPicker 中設 pickerCount=1）
 
@@ -2670,8 +2683,9 @@ export class BattlePhase implements Phase {
   private buildPickerUI(): void {
     if (!this.pickerContainer) return
 
-    const w = 140
+    const w = 160
     const h = 56
+    const btnW = 48
 
     // 背景
     const bg = this.scene.add.graphics()
@@ -2681,19 +2695,40 @@ export class BattlePhase implements Phase {
     bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8)
     this.pickerContainer.add(bg)
 
-    // 左側數字（前一個）
-    const prevText = this.scene.add.text(-44, 0, '', {
-      fontSize: '14px',
-      color: '#666666',
+    // 提示文字（上方）
+    const hintText = this.scene.add.text(0, -h / 2 - 14, '選擇數量 → 按發射台射出', {
+      fontSize: '11px',
+      color: '#aaaaaa',
+    })
+    hintText.setOrigin(0.5)
+    this.pickerContainer.add(hintText)
+
+    // 左側 - 按鈕（可點擊區域）
+    const minusZone = this.scene.add.rectangle(-w / 2 + btnW / 2, 0, btnW, h, 0x000000, 0)
+    minusZone.setInteractive({ useHandCursor: true })
+    this.pickerContainer.add(minusZone)
+
+    const minusLabel = this.scene.add.text(-w / 2 + btnW / 2, 0, '−', {
+      fontSize: '24px',
+      color: '#aaaaaa',
       fontStyle: 'bold',
     })
-    prevText.setOrigin(0.5)
-    this.pickerContainer.add(prevText)
-    this.pickerPrevText = prevText
+    minusLabel.setOrigin(0.5)
+    this.pickerContainer.add(minusLabel)
+
+    minusZone.on('pointerup', () => {
+      const newCount = Phaser.Math.Clamp(this.pickerCount - 1, 1, this.pickerMax)
+      if (newCount !== this.pickerCount) {
+        this.pickerCount = newCount
+        this.updatePickerDisplay()
+      }
+    })
+    minusZone.on('pointerover', () => minusLabel.setColor('#ffffff'))
+    minusZone.on('pointerout', () => minusLabel.setColor('#aaaaaa'))
 
     // 中央數字（當前）
     const currText = this.scene.add.text(0, 0, `${this.pickerCount}`, {
-      fontSize: '20px',
+      fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold',
       stroke: '#000000',
@@ -2703,59 +2738,43 @@ export class BattlePhase implements Phase {
     this.pickerContainer.add(currText)
     this.pickerCurrText = currText
 
-    // 右側數字（下一個）
-    const nextText = this.scene.add.text(44, 0, '', {
-      fontSize: '14px',
-      color: '#666666',
+    // 右側 + 按鈕（可點擊區域）
+    const plusZone = this.scene.add.rectangle(w / 2 - btnW / 2, 0, btnW, h, 0x000000, 0)
+    plusZone.setInteractive({ useHandCursor: true })
+    this.pickerContainer.add(plusZone)
+
+    const plusLabel = this.scene.add.text(w / 2 - btnW / 2, 0, '+', {
+      fontSize: '24px',
+      color: '#aaaaaa',
       fontStyle: 'bold',
     })
-    nextText.setOrigin(0.5)
-    this.pickerContainer.add(nextText)
-    this.pickerNextText = nextText
+    plusLabel.setOrigin(0.5)
+    this.pickerContainer.add(plusLabel)
 
-    // 上方提示箭頭（↑ 向上拖曳瞄準）
-    const hintText = this.scene.add.text(0, -h / 2 - 14, '↑ 拖曳瞄準', {
-      fontSize: '12px',
-      color: '#cccccc',
+    plusZone.on('pointerup', () => {
+      const newCount = Phaser.Math.Clamp(this.pickerCount + 1, 1, this.pickerMax)
+      if (newCount !== this.pickerCount) {
+        this.pickerCount = newCount
+        this.updatePickerDisplay()
+      }
     })
-    hintText.setOrigin(0.5)
-    this.pickerContainer.add(hintText)
+    plusZone.on('pointerover', () => plusLabel.setColor('#ffffff'))
+    plusZone.on('pointerout', () => plusLabel.setColor('#aaaaaa'))
 
-    // 左右方向指示（< >）
-    const leftArrow = this.scene.add.text(-w / 2 + 8, 0, '<', {
-      fontSize: '12px',
-      color: '#555555',
-      fontStyle: 'bold',
-    })
-    leftArrow.setOrigin(0.5)
-    this.pickerContainer.add(leftArrow)
-
-    const rightArrow = this.scene.add.text(w / 2 - 8, 0, '>', {
-      fontSize: '12px',
-      color: '#555555',
-      fontStyle: 'bold',
-    })
-    rightArrow.setOrigin(0.5)
-    this.pickerContainer.add(rightArrow)
+    // 分隔線
+    const divGfx = this.scene.add.graphics()
+    divGfx.lineStyle(1, 0x333355, 0.8)
+    divGfx.lineBetween(-w / 2 + btnW, -h / 2 + 4, -w / 2 + btnW, h / 2 - 4)
+    divGfx.lineBetween(w / 2 - btnW, -h / 2 + 4, w / 2 - btnW, h / 2 - 4)
+    this.pickerContainer.add(divGfx)
 
     this.updatePickerDisplay()
   }
 
   private updatePickerDisplay(): void {
     if (!this.pickerCurrText) return
-
-    const prev = this.pickerCount - 1
-    const next = this.pickerCount + 1
-
-    if (this.pickerPrevText) {
-      this.pickerPrevText.setText(prev >= 1 ? `${prev}` : '')
-    }
     this.pickerCurrText.setText(`${this.pickerCount}`)
-    if (this.pickerNextText) {
-      this.pickerNextText.setText(next <= this.pickerMax ? `${next}` : '')
-    }
-
-    // 數字切換彈性動畫
+    // 數字彈性動畫
     this.scene.tweens.add({
       targets: this.pickerCurrText,
       scaleX: { from: 1.25, to: 1.0 },
@@ -3175,14 +3194,22 @@ export class BattlePhase implements Phase {
   private setupInputHandlers(): void {
     // pointerdown: 記錄 picker 滑動起點 + 點外關閉；或開始拖拽瞄準
     this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      // picker 模式：記錄滑動起點，點擊 picker 外部關閉
+      // picker 模式：點擊發射台進入瞄準，點擊外部關閉
       if (this.pickerMode) {
-        this.pickerStartX = pointer.x
-        this.pickerStartY = pointer.y
-
+        // 點擊發射台附近 → 關閉 picker，進入瞄準模式
+        const lpDx = pointer.worldX - LAUNCH_PAD_X
+        const lpDy = pointer.worldY - LAUNCH_PAD_Y
+        if (Math.sqrt(lpDx * lpDx + lpDy * lpDy) < LAUNCH_PAD_RADIUS + 30) {
+          const monsterId = this.pickerMonsterId!
+          this.hidePicker(true)
+          this.enterAimMode(monsterId)
+          this.aimStartPoint = { x: LAUNCH_PAD_X, y: LAUNCH_PAD_Y }
+          return
+        }
+        // 點擊 picker 外部 → 關閉 picker
         if (this.pickerContainer) {
           const bounds = this.pickerContainer.getBounds()
-          if (!Phaser.Geom.Rectangle.Contains(bounds, pointer.x, pointer.y)) {
+          if (!Phaser.Geom.Rectangle.Contains(bounds, pointer.worldX, pointer.worldY)) {
             this.hidePicker()
           }
         }
@@ -3191,47 +3218,11 @@ export class BattlePhase implements Phase {
 
       if (!this.aimMode) return
 
-      const dx = pointer.worldX - LAUNCH_PAD_X
-      const dy = pointer.worldY - LAUNCH_PAD_Y
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist > LAUNCH_PAD_RADIUS + 30) return
-
       this.aimStartPoint = { x: pointer.worldX, y: pointer.worldY }
     })
 
-    // pointermove: picker 手勢 / 更新瞄準線
+    // pointermove: 更新瞄準線
     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      // picker 模式的手勢處理
-      if (this.pickerMode && pointer.isDown) {
-        const dx = pointer.x - this.pickerStartX
-        const dy = pointer.y - this.pickerStartY
-        const absDx = Math.abs(dx)
-        const absDy = Math.abs(dy)
-
-        // 向上拖曳 > 20px 且垂直位移 > 水平位移 → 切換為瞄準
-        if (dy < -20 && absDy > absDx) {
-          const monsterId = this.pickerMonsterId!
-          this.hidePicker(true)
-          this.enterAimMode(monsterId)
-          // 以目前 pointer 位置作為瞄準起點
-          this.aimStartPoint = { x: pointer.worldX, y: pointer.worldY }
-          return
-        }
-
-        // 水平滑動 → 每 30px 換一格
-        if (absDx >= 30) {
-          const steps = Math.floor(absDx / 30)
-          const delta = dx > 0 ? steps : -steps
-          const newCount = Phaser.Math.Clamp(this.pickerCount + delta, 1, this.pickerMax)
-          if (newCount !== this.pickerCount) {
-            this.pickerCount = newCount
-            this.updatePickerDisplay()
-          }
-          this.pickerStartX = pointer.x  // 重設起點防止累積
-        }
-        return
-      }
-
       if (!this.aimMode || !this.aimStartPoint || !this.aimLine) return
 
       const dragX = pointer.worldX - this.aimStartPoint.x
@@ -3980,6 +3971,11 @@ export class BattlePhase implements Phase {
       this.scene.tweens.killTweensOf(this.launchPadGraphics)
       this.launchPadGraphics.destroy()
       this.launchPadGraphics = null
+    }
+    if (this.launchPadHighlight) {
+      this.scene.tweens.killTweensOf(this.launchPadHighlight)
+      this.launchPadHighlight.destroy()
+      this.launchPadHighlight = null
     }
 
     // 銷毀部署面板
