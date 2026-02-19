@@ -128,7 +128,7 @@ export class ResultPhase implements Phase {
       ROOM_X + PANEL_PADDING,
       RESULT_Y + PANEL_PADDING,
       '\u6230\u9B25\u7D50\u7B97',
-      { fontSize: '18px', color: '#ffcc44', fontStyle: 'bold',
+      { fontSize: '20px', color: '#ffcc44', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 3 }
     )
     title.setAlpha(0)
@@ -206,7 +206,8 @@ export class ResultPhase implements Phase {
         ROOM_X + PANEL_PADDING,
         yOffset,
         `${name}: XP ${monster.currentXP} / ${DATA_CONSTANTS.EVOLUTION_XP_THRESHOLD}`,
-        { fontSize: '13px', color: `#${UI_TEXT_DIM.toString(16)}` }
+        { fontSize: '14px', color: `#${UI_TEXT_DIM.toString(16)}`,
+          stroke: '#000000', strokeThickness: 2 }
       )
       xpLine.setAlpha(0)
       this.scene.tweens.add({
@@ -220,10 +221,10 @@ export class ResultPhase implements Phase {
       this.gameObjects.push(xpLine)
 
       // XP progress bar（帶填充動畫）
-      const barX = ROOM_X + PANEL_WIDTH - PANEL_PADDING - 80
+      const barX = ROOM_X + PANEL_WIDTH - PANEL_PADDING - 100
       const barY = yOffset + 4
-      const barWidth = 80
-      const barHeight = 8
+      const barWidth = 100
+      const barHeight = 10
       const xpRatio = Math.min(monster.currentXP / DATA_CONSTANTS.EVOLUTION_XP_THRESHOLD, 1)
 
       const xpBarGfx = this.scene.add.graphics()
@@ -274,8 +275,9 @@ export class ResultPhase implements Phase {
     const hint = this.scene.add.text(
       ROOM_X + PANEL_WIDTH / 2,
       RESULT_Y + panelHeight - PANEL_PADDING,
-      'Tap to continue',
-      { fontSize: '12px', color: `#${UI_TEXT_DIM.toString(16)}` }
+      '點擊繼續',
+      { fontSize: '14px', color: `#${UI_TEXT_DIM.toString(16)}`,
+        stroke: '#000000', strokeThickness: 2 }
     )
     hint.setOrigin(0.5, 1)
     this.gameObjects.push(hint)
@@ -378,8 +380,8 @@ export class ResultPhase implements Phase {
     const title = this.scene.add.text(
       ROOM_X + PANEL_WIDTH / 2,
       RESULT_Y + PANEL_PADDING,
-      `${monsterName} is ready to evolve!`,
-      { fontSize: '17px', color: '#ffdd44', fontStyle: 'bold',
+      `${monsterName} 準備進化！`,
+      { fontSize: '20px', color: '#ffdd44', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 3 }
     )
     title.setOrigin(0.5, 0)
@@ -455,22 +457,22 @@ export class ResultPhase implements Phase {
     const stats = evoDef.evolvedStats
     const hpText = this.scene.add.text(
       x + 8, y + 52,
-      `HP: ${stats.hp}`,
-      { fontSize: '12px', color: '#44cc66', fontFamily: 'monospace', fontStyle: 'bold',
+      `生命 ${stats.hp}`,
+      { fontSize: '13px', color: '#44cc66', fontFamily: 'monospace', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 2 }
     )
     this.gameObjects.push(hpText)
     const atkText = this.scene.add.text(
       x + 8, y + 68,
-      `ATK: ${stats.attack}`,
-      { fontSize: '12px', color: '#ff8866', fontFamily: 'monospace', fontStyle: 'bold',
+      `攻擊 ${stats.attack}`,
+      { fontSize: '13px', color: '#ff8866', fontFamily: 'monospace', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 2 }
     )
     this.gameObjects.push(atkText)
     const spdText = this.scene.add.text(
       x + 8, y + 84,
-      `SPD: ${stats.attackInterval}s`,
-      { fontSize: '12px', color: '#88bbff', fontFamily: 'monospace', fontStyle: 'bold',
+      `速度 ${stats.attackInterval}s`,
+      { fontSize: '13px', color: '#88bbff', fontFamily: 'monospace', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 2 }
     )
     this.gameObjects.push(spdText)
@@ -480,7 +482,7 @@ export class ResultPhase implements Phase {
       x + 8, y + 104,
       evoDef.specialAbility.description,
       {
-        fontSize: '11px',
+        fontSize: '12px',
         color: '#aaddff',
         wordWrap: { width: w - 16 },
         stroke: '#000000',
@@ -583,7 +585,7 @@ export class ResultPhase implements Phase {
     const options = this.shuffleArray([...roomPool]).slice(0, 3)
 
     // Panel（ProjectDK 多層面板）
-    const panelHeight = 240
+    const panelHeight = 270
     const bgGfx = this.scene.add.graphics()
     drawPanel(bgGfx, ROOM_X, RESULT_Y, PANEL_WIDTH, panelHeight, 0.85, 8)
     this.gameObjects.push(bgGfx)
@@ -593,7 +595,7 @@ export class ResultPhase implements Phase {
       ROOM_X + PANEL_WIDTH / 2,
       RESULT_Y + PANEL_PADDING,
       '\u9078\u64C7\u623F\u9593',
-      { fontSize: '18px', color: '#ffcc44', fontStyle: 'bold',
+      { fontSize: '20px', color: '#ffcc44', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 3 }
     )
     title.setOrigin(0.5, 0)
@@ -601,7 +603,7 @@ export class ResultPhase implements Phase {
 
     // Room cards
     const cardWidth = (PANEL_WIDTH - PANEL_PADDING * 4) / 3
-    const cardHeight = 170
+    const cardHeight = 200
     const cardY = RESULT_Y + 40
 
     for (let i = 0; i < options.length; i++) {
@@ -673,7 +675,7 @@ export class ResultPhase implements Phase {
     const name = this.scene.add.text(
       x + w / 2, y + 30,
       room.name,
-      { fontSize: '13px', color: nameColorHex, fontStyle: 'bold',
+      { fontSize: '14px', color: nameColorHex, fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 2 }
     )
     name.setOrigin(0.5, 0)
@@ -684,7 +686,7 @@ export class ResultPhase implements Phase {
       x + 4, y + 48,
       room.effect.description,
       {
-        fontSize: '11px',
+        fontSize: '12px',
         color: '#aaddff',
         wordWrap: { width: w - 8 },
       }
@@ -696,10 +698,10 @@ export class ResultPhase implements Phase {
     const countOfThisType = this.countOwnedRoomsOfType(room.type)
     const nextValue = dimValues[Math.min(countOfThisType, dimValues.length - 1)]
     const dimText = this.scene.add.text(
-      x + 4, y + 80,
-      `Next bonus: ${this.formatDimValue(room, nextValue)}`,
+      x + 4, y + 84,
+      `下次加成：${this.formatDimValue(room, nextValue)}`,
       {
-        fontSize: '10px',
+        fontSize: '12px',
         color: `#${UI_TEXT_DIM.toString(16)}`,
         wordWrap: { width: w - 8 },
       }
@@ -708,21 +710,22 @@ export class ResultPhase implements Phase {
 
     // Owned count
     const ownedText = this.scene.add.text(
-      x + 4, y + 100,
-      `Owned: ${countOfThisType}`,
-      { fontSize: '10px', color: `#${UI_TEXT_DIM.toString(16)}` }
+      x + 4, y + 108,
+      `已擁有：${countOfThisType}`,
+      { fontSize: '12px', color: `#${UI_TEXT_DIM.toString(16)}`,
+        stroke: '#000000', strokeThickness: 1 }
     )
     this.gameObjects.push(ownedText)
 
     // Description
     const desc = this.scene.add.text(
-      x + 4, y + 118,
+      x + 4, y + 130,
       room.description,
       {
-        fontSize: '9px',
+        fontSize: '11px',
         color: `#${UI_TEXT_DIM.toString(16)}`,
         wordWrap: { width: w - 8 },
-        lineSpacing: 4,
+        lineSpacing: 3,
       }
     )
     this.gameObjects.push(desc)
@@ -877,7 +880,7 @@ export class ResultPhase implements Phase {
       RESULT_Y + PANEL_PADDING,
       `\u5F81\u670D\u623F\u9593: ${roomsConquered}\n\u7372\u5F97\u91D1\u5E63: ${totalGold}`,
       {
-        fontSize: '16px',
+        fontSize: '18px',
         color: `#${UI_TEXT.toString(16)}`,
         lineSpacing: 8,
         stroke: '#000000',
@@ -951,7 +954,7 @@ export class ResultPhase implements Phase {
     const btnText = this.scene.add.text(
       btnX + btnWidth / 2, btnY + btnHeight / 2,
       '\u518D\u8A66\u4E00\u6B21',
-      { fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
+      { fontSize: '20px', color: '#ffffff', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 3 }
     )
     btnText.setOrigin(0.5)
@@ -984,11 +987,11 @@ export class ResultPhase implements Phase {
   private formatDimValue(room: RoomDefinition, value: number): string {
     switch (room.effect.type) {
       case 'gold_bonus':
-        return `+${Math.round(value * 100)}% gold`
+        return `+${Math.round(value * 100)}% 金幣`
       case 'attack_speed':
-        return `+${Math.round(value * 100)}% ATK SPD`
+        return `+${Math.round(value * 100)}% 攻速`
       case 'spawn_minions':
-        return `${value} minions`
+        return `${value} 隻小兵`
       default:
         return `${value}`
     }
