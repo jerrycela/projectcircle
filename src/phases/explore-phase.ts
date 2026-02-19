@@ -24,8 +24,8 @@ import { TEXTURE_KEYS } from '../utils/texture-factory'
 const ROOM_X = (GAME_WIDTH - ROOM_WIDTH) / 2   // 水平居中
 const ROOM_Y = 20                                // 頂部留 20px
 const WALL_THICKNESS = 8
-const DOOR_WIDTH = 60
-const DOOR_HEIGHT = 12
+const DOOR_WIDTH = 72
+const DOOR_HEIGHT = 16
 
 // 部署槽位位置（相對於房間左上角）
 const SLOT_POSITIONS = [
@@ -38,9 +38,9 @@ const SLOT_RADIUS = 18
 
 // 消耗品欄位配置
 const CONSUMABLE_BAR_Y = ROOM_Y + ROOM_HEIGHT + 20   // 房間下方 20px
-const CONSUMABLE_CARD_WIDTH = 80
-const CONSUMABLE_CARD_HEIGHT = 60
-const CONSUMABLE_CARD_GAP = 6
+const CONSUMABLE_CARD_WIDTH = 90
+const CONSUMABLE_CARD_HEIGHT = 70
+const CONSUMABLE_CARD_GAP = 8
 const CONSUMABLE_BAR_LABEL_HEIGHT = 18
 
 interface PurchasedConsumable {
@@ -208,7 +208,7 @@ export class ExplorePhase implements Phase {
       this.uiElements.push(slotBackGlow)
 
       // 虛線圓圈（更粗）
-      g.lineStyle(2.5, ROOM_ACCENT, 0.7)
+      g.lineStyle(3, ROOM_ACCENT, 0.8)
       const segments = 12
       for (let s = 0; s < segments; s++) {
         if (s % 2 === 0) {
@@ -221,7 +221,7 @@ export class ExplorePhase implements Phase {
       }
 
       // 內圈填充（半透明暗色）
-      g.fillStyle(0x1a1a2e, 0.3)
+      g.fillStyle(0x1a1428, 0.35)
       g.fillCircle(sx, sy, SLOT_RADIUS - 4)
 
       // 槽位中心脈動光環（更明顯）
@@ -240,8 +240,8 @@ export class ExplorePhase implements Phase {
 
       // 槽位標籤（帶描邊）
       const label = this.scene.add.text(sx, sy + SLOT_RADIUS + 8, slot.label, {
-        fontSize: '11px',
-        color: '#8888aa',
+        fontSize: '13px',
+        color: '#a8a0b8',
         stroke: '#000000',
         strokeThickness: 2,
       })
@@ -421,6 +421,26 @@ export class ExplorePhase implements Phase {
     }
     this.uiElements.push(diamondGfx)
 
+    // 難度中文標籤
+    const diffLabel = distance >= 3 ? '困難' : distance === 2 ? '普通' : '簡單'
+    const diffColor = distance >= 3 ? '#ff5555' : distance === 2 ? '#ffaa33' : '#55bbdd'
+    let labelOffsetX = 0
+    let labelOffsetY = 0
+    switch (dir) {
+      case 'up': labelOffsetY = 16; break
+      case 'down': labelOffsetY = -16; break
+      case 'left': labelOffsetX = 16; break
+      case 'right': labelOffsetX = -16; break
+    }
+    const diffText = this.scene.add.text(
+      indicatorX + labelOffsetX, indicatorY + labelOffsetY,
+      diffLabel,
+      { fontSize: '13px', color: diffColor, fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2 }
+    )
+    diffText.setOrigin(0.5)
+    this.uiElements.push(diffText)
+
     // 門點擊事件（帶閃光回饋）
     hitArea.on('pointerup', () => {
       const doorFlash = this.scene.add.rectangle(dx + w / 2, dy + h / 2, w * 1.2, h * 1.2, 0xffffff, 0.35)
@@ -469,7 +489,7 @@ export class ExplorePhase implements Phase {
       GAME_WIDTH / 2,
       CONSUMABLE_BAR_Y,
       titleText,
-      { fontSize: '14px', color: '#aabbcc', fontStyle: 'bold',
+      { fontSize: '16px', color: '#a8a0b8', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 2 },
     )
     barLabel.setOrigin(0.5, 0)
@@ -550,9 +570,9 @@ export class ExplorePhase implements Phase {
       : `#${UI_TEXT.toString(16).padStart(6, '0')}`
     const nameText = this.scene.add.text(
       x + CONSUMABLE_CARD_WIDTH / 2,
-      y + 12,
+      y + 16,
       def.name,
-      { fontSize: '12px', color: nameColor, fontStyle: 'bold',
+      { fontSize: '14px', color: nameColor, fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 2 },
     )
     nameText.setOrigin(0.5)
@@ -562,9 +582,9 @@ export class ExplorePhase implements Phase {
     const costColor = canAfford ? '#FFD700' : '#FF4444'
     const costText = this.scene.add.text(
       x + CONSUMABLE_CARD_WIDTH / 2,
-      y + 28,
+      y + 35,
       `${def.cost}g`,
-      { fontSize: '12px', color: costColor, fontFamily: 'monospace', fontStyle: 'bold',
+      { fontSize: '14px', color: costColor, fontFamily: 'monospace', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 2 },
     )
     costText.setOrigin(0.5)
@@ -574,10 +594,10 @@ export class ExplorePhase implements Phase {
     if (def.maxPerBattle !== undefined) {
       const limitText = this.scene.add.text(
         x + CONSUMABLE_CARD_WIDTH / 2,
-        y + 44,
+        y + 52,
         `${purchasedCount}/${def.maxPerBattle}`,
         {
-          fontSize: '10px',
+          fontSize: '12px',
           color: maxReached
             ? '#FF4444'
             : `#${UI_TEXT_DIM.toString(16).padStart(6, '0')}`,
