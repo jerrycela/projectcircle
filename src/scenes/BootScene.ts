@@ -9,7 +9,7 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     // Prototype 階段：無外部資源需載入，所有圖形用程式生成
     const { width, height } = this.cameras.main
-    const loadingText = this.add.text(width / 2, height / 2, 'Loading...', {
+    const loadingText = this.add.text(width / 2, height / 2, '載入中...', {
       fontSize: '24px',
       color: '#ffffff'
     })

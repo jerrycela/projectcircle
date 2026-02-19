@@ -9,7 +9,7 @@ export class OverviewScene extends Phaser.Scene {
     const { width, height } = this.cameras.main
 
     // 標題
-    const title = this.add.text(width / 2, 40, 'Overview Map', {
+    const title = this.add.text(width / 2, 40, '地圖總覽', {
       fontSize: '28px',
       color: '#ffffff',
       fontStyle: 'bold'
@@ -18,7 +18,7 @@ export class OverviewScene extends Phaser.Scene {
 
     // 顯示已征服房間的全覽 (Prototype 最小可行版本)
     const currentRoom = this.registry.get('currentRoom') as number
-    const infoText = this.add.text(width / 2, height / 2, `Conquered Rooms: ${currentRoom}`, {
+    const infoText = this.add.text(width / 2, height / 2, `已征服房間：${currentRoom}`, {
       fontSize: '20px',
       color: '#aaaaaa'
     })
@@ -40,7 +40,7 @@ export class OverviewScene extends Phaser.Scene {
     backButton.setStrokeStyle(2, 0x4a4a6a)
     backButton.setInteractive({ useHandCursor: true })
 
-    const backText = this.add.text(buttonX, buttonY, 'Back', {
+    const backText = this.add.text(buttonX, buttonY, '返回', {
       fontSize: '20px',
       color: '#ffffff'
     })

@@ -205,7 +205,7 @@ export class ResultPhase implements Phase {
       const xpLine = this.scene.add.text(
         ROOM_X + PANEL_PADDING,
         yOffset,
-        `${name}: XP ${monster.currentXP} / ${DATA_CONSTANTS.EVOLUTION_XP_THRESHOLD}`,
+        `${name}：經驗 ${monster.currentXP} / ${DATA_CONSTANTS.EVOLUTION_XP_THRESHOLD}`,
         { fontSize: '14px', color: `#${UI_TEXT_DIM.toString(16)}`,
           stroke: '#000000', strokeThickness: 2 }
       )

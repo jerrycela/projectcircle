@@ -3630,7 +3630,7 @@ export class BattlePhase implements Phase {
     bg.setInteractive({ useHandCursor: true })
     container.add(bg)
 
-    const label = this.scene.add.text(0, -10, 'Heal', {
+    const label = this.scene.add.text(0, -10, '治癒', {
       fontSize: '11px', color: '#44ff44',
     })
     label.setOrigin(0.5)
