@@ -54,9 +54,11 @@ import { TEXTURE_KEYS, UNIT_TEXTURE_MAP, EVOLUTION_TINTS } from '../utils/textur
 const ROOM_X = (GAME_WIDTH - ROOM_WIDTH) / 2
 const ROOM_Y = 20
 
-// 發射台位置（房間底部中央）
-const LAUNCH_PAD_X = ROOM_X + ROOM_WIDTH / 2
-const LAUNCH_PAD_Y = ROOM_Y + ROOM_HEIGHT - 15
+// 雙發射台位置（左下 + 右下，地圖底部對稱）
+const LAUNCH_PADS: Array<{ x: number; y: number }> = [
+  { x: ROOM_X + ROOM_WIDTH * 0.25, y: ROOM_Y + ROOM_HEIGHT - 15 },
+  { x: ROOM_X + ROOM_WIDTH * 0.75, y: ROOM_Y + ROOM_HEIGHT - 15 },
+]
 const LAUNCH_PAD_RADIUS = 18
 
 // 發射參數
@@ -197,7 +199,9 @@ export class BattlePhase implements Phase {
   private aimLine: Phaser.GameObjects.Graphics | null = null
   private aimStartPoint: { x: number; y: number } | null = null
   private aimPowerText: Phaser.GameObjects.Text | null = null
-  private launchPadGraphics: Phaser.GameObjects.Graphics | null = null
+  private launchPadGraphicsList: Phaser.GameObjects.Graphics[] = []
+  private launchPadHighlightList: Phaser.GameObjects.Graphics[] = []
+  private activeLaunchPadIndex: number = 0
 
   // 全滅緩衝計時
   private allDeadTimer: number = 0
@@ -257,7 +261,6 @@ export class BattlePhase implements Phase {
   private pickerMax: number = 1
   private pickerContainer: Phaser.GameObjects.Container | null = null
   private pickerCurrText: Phaser.GameObjects.Text | null = null
-  private launchPadHighlight: Phaser.GameObjects.Graphics | null = null
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
@@ -305,7 +308,7 @@ export class BattlePhase implements Phase {
       this.usingSharedRoom = false
       this.drawBattleRoom()
     }
-    this.createLaunchPad()
+    this.createLaunchPads()
     this.createDeployPanel()
     this.setupInputHandlers()
 
@@ -884,10 +887,12 @@ export class BattlePhase implements Phase {
     const aliveAllies = this.units.filter(u => u.faction === 'ally' && u.alive)
     if (aliveAllies.length >= this.getEffectiveAllyLimit()) return
 
+    const activePad = LAUNCH_PADS[this.activeLaunchPadIndex]
+
     // 在發射台位置建立單位（連射時使用指定的進化資料）
     const unit = (evolutionOverride !== undefined)
-      ? this.createMonsterUnitWithEvolution(monsterDef, LAUNCH_PAD_X, LAUNCH_PAD_Y, evolutionOverride)
-      : this.createMonsterUnit(monsterDef, LAUNCH_PAD_X, LAUNCH_PAD_Y)
+      ? this.createMonsterUnitWithEvolution(monsterDef, activePad.x, activePad.y, evolutionOverride)
+      : this.createMonsterUnit(monsterDef, activePad.x, activePad.y)
 
     // 套用水晶 buff
     if (this.crystalsAppliedCount < this.unusedCrystals) {
@@ -904,12 +909,12 @@ export class BattlePhase implements Phase {
         const cAngle = Math.random() * Math.PI * 2
         const cDist = 10 + Math.random() * 10
         const crystal = this.scene.add.circle(
-          LAUNCH_PAD_X, LAUNCH_PAD_Y, 1.5, 0x8888ff, 0.9
+          activePad.x, activePad.y, 1.5, 0x8888ff, 0.9
         )
         this.scene.tweens.add({
           targets: crystal,
-          x: LAUNCH_PAD_X + Math.cos(cAngle) * cDist,
-          y: LAUNCH_PAD_Y + Math.sin(cAngle) * cDist,
+          x: activePad.x + Math.cos(cAngle) * cDist,
+          y: activePad.y + Math.sin(cAngle) * cDist,
           alpha: 0, duration: 250,
           ease: 'Quad.easeOut',
           onComplete: () => crystal.destroy(),
@@ -951,12 +956,12 @@ export class BattlePhase implements Phase {
       const lpDist = 8 + Math.random() * 14
       const lpColor = lp % 2 === 0 ? 0x88bbdd : 0xaaddff
       const lpParticle = this.scene.add.circle(
-        LAUNCH_PAD_X, LAUNCH_PAD_Y, 1 + Math.random(), lpColor, 0.7
+        activePad.x, activePad.y, 1 + Math.random(), lpColor, 0.7
       )
       this.scene.tweens.add({
         targets: lpParticle,
-        x: LAUNCH_PAD_X + Math.cos(spread) * lpDist,
-        y: LAUNCH_PAD_Y + Math.sin(spread) * lpDist,
+        x: activePad.x + Math.cos(spread) * lpDist,
+        y: activePad.y + Math.sin(spread) * lpDist,
         alpha: 0,
         duration: 200 + Math.random() * 100,
         ease: 'Quad.easeOut',
@@ -965,9 +970,10 @@ export class BattlePhase implements Phase {
     }
 
     // 發射台短暫亮閃
-    if (this.launchPadGraphics) {
+    const activeGraphics = this.launchPadGraphicsList[this.activeLaunchPadIndex]
+    if (activeGraphics) {
       this.scene.tweens.add({
-        targets: this.launchPadGraphics,
+        targets: activeGraphics,
         alpha: 1,
         duration: 60,
         yoyo: true,
@@ -2502,83 +2508,86 @@ export class BattlePhase implements Phase {
 
   // ============ 發射台 ============
 
-  private createLaunchPad(): void {
-    const g = this.scene.add.graphics()
-    this.launchPadGraphics = g
+  private createLaunchPads(): void {
+    for (let i = 0; i < LAUNCH_PADS.length; i++) {
+      const pad = LAUNCH_PADS[i]
+      const g = this.scene.add.graphics()
+      this.launchPadGraphicsList.push(g)
 
-    // 外圈光暈底（大範圍柔光）
-    const padGlow = this.scene.add.circle(LAUNCH_PAD_X, LAUNCH_PAD_Y, LAUNCH_PAD_RADIUS + 12, 0x5588aa, 0.08)
-    this.roomTileSprites.push(padGlow)
-    this.scene.tweens.add({
-      targets: padGlow,
-      alpha: 0.15,
-      scaleX: 1.2,
-      scaleY: 1.2,
-      duration: 1500,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
+      // 外圈光暈底（大範圍柔光）
+      const padGlow = this.scene.add.circle(pad.x, pad.y, LAUNCH_PAD_RADIUS + 12, 0x5588aa, 0.08)
+      this.roomTileSprites.push(padGlow)
+      this.scene.tweens.add({
+        targets: padGlow,
+        alpha: 0.15,
+        scaleX: 1.2,
+        scaleY: 1.2,
+        duration: 1500,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
 
-    // 最外圈（虛線感覺 — 用 4 段弧線）
-    g.lineStyle(1.5, 0x5588aa, 0.4)
-    for (let arc = 0; arc < 4; arc++) {
-      const startAngle = arc * Math.PI / 2 + 0.15
-      const endAngle = startAngle + Math.PI / 2 - 0.3
-      g.beginPath()
-      g.arc(LAUNCH_PAD_X, LAUNCH_PAD_Y, LAUNCH_PAD_RADIUS + 4, startAngle, endAngle)
-      g.strokePath()
+      // 最外圈（虛線感覺 — 用 4 段弧線）
+      g.lineStyle(1.5, 0x5588aa, 0.4)
+      for (let arc = 0; arc < 4; arc++) {
+        const startAngle = arc * Math.PI / 2 + 0.15
+        const endAngle = startAngle + Math.PI / 2 - 0.3
+        g.beginPath()
+        g.arc(pad.x, pad.y, LAUNCH_PAD_RADIUS + 4, startAngle, endAngle)
+        g.strokePath()
+      }
+
+      // 外圈（實線）
+      g.lineStyle(2, 0x88bbdd, 0.7)
+      g.strokeCircle(pad.x, pad.y, LAUNCH_PAD_RADIUS)
+
+      // 內填充（漸層模擬：外暗內亮）
+      g.fillStyle(0x223344, 0.5)
+      g.fillCircle(pad.x, pad.y, LAUNCH_PAD_RADIUS - 2)
+      g.fillStyle(0x334466, 0.3)
+      g.fillCircle(pad.x, pad.y, LAUNCH_PAD_RADIUS - 6)
+
+      // 內圈
+      g.lineStyle(1, 0x88bbdd, 0.4)
+      g.strokeCircle(pad.x, pad.y, LAUNCH_PAD_RADIUS - 8)
+
+      // 十字準心（ProjectDK 風格符文標記）
+      g.lineStyle(1.5, 0x88bbdd, 0.5)
+      g.lineBetween(pad.x, pad.y - 10, pad.x, pad.y - 4)
+      g.lineBetween(pad.x, pad.y + 4, pad.x, pad.y + 10)
+      g.lineBetween(pad.x - 10, pad.y, pad.x - 4, pad.y)
+      g.lineBetween(pad.x + 4, pad.y, pad.x + 10, pad.y)
+
+      // 向上箭頭指示（更大）
+      g.lineStyle(2.5, 0x88ccdd, 0.7)
+      g.lineBetween(pad.x, pad.y - 14, pad.x - 7, pad.y - 5)
+      g.lineBetween(pad.x, pad.y - 14, pad.x + 7, pad.y - 5)
+
+      // 脈衝動畫
+      this.scene.tweens.add({
+        targets: g,
+        alpha: { from: 0.7, to: 1 },
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+
+      // 高亮圈（pickerOpen 時顯示，預設隱藏）
+      const hl = this.scene.add.graphics()
+      hl.lineStyle(3, 0x44ddff, 0.9)
+      hl.strokeCircle(pad.x, pad.y, LAUNCH_PAD_RADIUS + 8)
+      hl.setVisible(false)
+      this.launchPadHighlightList.push(hl)
+      this.scene.tweens.add({
+        targets: hl,
+        alpha: { from: 0.5, to: 1.0 },
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+      })
     }
-
-    // 外圈（實線）
-    g.lineStyle(2, 0x88bbdd, 0.7)
-    g.strokeCircle(LAUNCH_PAD_X, LAUNCH_PAD_Y, LAUNCH_PAD_RADIUS)
-
-    // 內填充（漸層模擬：外暗內亮）
-    g.fillStyle(0x223344, 0.5)
-    g.fillCircle(LAUNCH_PAD_X, LAUNCH_PAD_Y, LAUNCH_PAD_RADIUS - 2)
-    g.fillStyle(0x334466, 0.3)
-    g.fillCircle(LAUNCH_PAD_X, LAUNCH_PAD_Y, LAUNCH_PAD_RADIUS - 6)
-
-    // 內圈
-    g.lineStyle(1, 0x88bbdd, 0.4)
-    g.strokeCircle(LAUNCH_PAD_X, LAUNCH_PAD_Y, LAUNCH_PAD_RADIUS - 8)
-
-    // 十字準心（ProjectDK 風格符文標記）
-    g.lineStyle(1.5, 0x88bbdd, 0.5)
-    g.lineBetween(LAUNCH_PAD_X, LAUNCH_PAD_Y - 10, LAUNCH_PAD_X, LAUNCH_PAD_Y - 4)
-    g.lineBetween(LAUNCH_PAD_X, LAUNCH_PAD_Y + 4, LAUNCH_PAD_X, LAUNCH_PAD_Y + 10)
-    g.lineBetween(LAUNCH_PAD_X - 10, LAUNCH_PAD_Y, LAUNCH_PAD_X - 4, LAUNCH_PAD_Y)
-    g.lineBetween(LAUNCH_PAD_X + 4, LAUNCH_PAD_Y, LAUNCH_PAD_X + 10, LAUNCH_PAD_Y)
-
-    // 向上箭頭指示（更大）
-    g.lineStyle(2.5, 0x88ccdd, 0.7)
-    g.lineBetween(LAUNCH_PAD_X, LAUNCH_PAD_Y - 14, LAUNCH_PAD_X - 7, LAUNCH_PAD_Y - 5)
-    g.lineBetween(LAUNCH_PAD_X, LAUNCH_PAD_Y - 14, LAUNCH_PAD_X + 7, LAUNCH_PAD_Y - 5)
-
-    // 脈衝動畫
-    this.scene.tweens.add({
-      targets: g,
-      alpha: { from: 0.7, to: 1 },
-      duration: 800,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-
-    // 高亮圈（pickerOpen 時顯示，預設隱藏）
-    const hl = this.scene.add.graphics()
-    hl.lineStyle(3, 0x44ddff, 0.9)
-    hl.strokeCircle(LAUNCH_PAD_X, LAUNCH_PAD_Y, LAUNCH_PAD_RADIUS + 8)
-    hl.setVisible(false)
-    this.launchPadHighlight = hl
-    this.scene.tweens.add({
-      targets: hl,
-      alpha: { from: 0.5, to: 1.0 },
-      duration: 600,
-      yoyo: true,
-      repeat: -1,
-    })
   }
 
   // ============ 數量選擇器 ============
@@ -2639,8 +2648,8 @@ export class BattlePhase implements Phase {
       }
     }
 
-    // 顯示發射台高亮，提示玩家可點擊
-    if (this.launchPadHighlight) this.launchPadHighlight.setVisible(true)
+    // 顯示所有發射台高亮，提示玩家可點擊
+    this.launchPadHighlightList.forEach(h => h.setVisible(true))
   }
 
   private hidePicker(immediate = false): void {
@@ -2649,7 +2658,7 @@ export class BattlePhase implements Phase {
     this.pickerMode = false
     this.pickerMonsterId = null
     this.pickerCurrText = null
-    if (this.launchPadHighlight) this.launchPadHighlight.setVisible(false)
+    this.launchPadHighlightList.forEach(h => h.setVisible(false))
     // pickerCount 刻意不在此重設：showPicker 每次開啟時會重新計算並覆蓋它
     // （pickerMax=1 直接跳 enterAimMode 的路徑也已在 showPicker 中設 pickerCount=1）
 
@@ -2786,11 +2795,13 @@ export class BattlePhase implements Phase {
 
   // ============ 瞄準模式 ============
 
-  private enterAimMode(monsterId: string): void {
+  private enterAimMode(monsterId: string, padIndex: number = 0): void {
     // 連射中不允許切換瞄準
     if (this.isBursting) return
 
+    const savedPickerCount = this.pickerCount
     this.exitAimMode()
+    this.pickerCount = savedPickerCount
 
     if (this.trapPlaceMode) {
       this.exitTrapPlaceMode()
@@ -2798,14 +2809,16 @@ export class BattlePhase implements Phase {
 
     this.aimMode = true
     this.aimMonsterId = monsterId
+    this.activeLaunchPadIndex = padIndex
 
+    const activePad = LAUNCH_PADS[padIndex]
     const monsterDef = DataRegistry.getMonsterById(monsterId)
     if (!monsterDef) return
 
     const evo = this.resolveEvolution(monsterId)
     const defId = evo?.id ?? monsterId
     const texKey = UNIT_TEXTURE_MAP[defId] ?? UNIT_TEXTURE_MAP[monsterId] ?? TEXTURE_KEYS.GOBLIN
-    const preview = this.scene.add.sprite(LAUNCH_PAD_X, LAUNCH_PAD_Y, texKey)
+    const preview = this.scene.add.sprite(activePad.x, activePad.y, texKey)
     const unitScale = EVOLUTION_SCALES[defId] ?? 2
     preview.setScale(unitScale)
     preview.setAlpha(0.7)
@@ -3196,14 +3209,23 @@ export class BattlePhase implements Phase {
     this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       // picker 模式：點擊發射台進入瞄準，點擊外部關閉
       if (this.pickerMode) {
-        // 點擊發射台附近 → 關閉 picker，進入瞄準模式
-        const lpDx = pointer.worldX - LAUNCH_PAD_X
-        const lpDy = pointer.worldY - LAUNCH_PAD_Y
-        if (Math.sqrt(lpDx * lpDx + lpDy * lpDy) < LAUNCH_PAD_RADIUS + 30) {
+        // 點擊任一發射台附近 → 關閉 picker，進入針對該台的瞄準模式
+        let clickedPadIndex = -1
+        for (let i = 0; i < LAUNCH_PADS.length; i++) {
+          const pad = LAUNCH_PADS[i]
+          const dx = pointer.worldX - pad.x
+          const dy = pointer.worldY - pad.y
+          if (Math.sqrt(dx * dx + dy * dy) < LAUNCH_PAD_RADIUS + 30) {
+            clickedPadIndex = i
+            break
+          }
+        }
+        if (clickedPadIndex >= 0) {
           const monsterId = this.pickerMonsterId!
           this.hidePicker(true)
-          this.enterAimMode(monsterId)
-          this.aimStartPoint = { x: LAUNCH_PAD_X, y: LAUNCH_PAD_Y }
+          this.enterAimMode(monsterId, clickedPadIndex)
+          const pad = LAUNCH_PADS[clickedPadIndex]
+          this.aimStartPoint = { x: pad.x, y: pad.y }
           return
         }
         // 點擊 picker 外部 → 關閉 picker
@@ -3225,6 +3247,7 @@ export class BattlePhase implements Phase {
     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (!this.aimMode || !this.aimStartPoint || !this.aimLine) return
 
+      const activePad = LAUNCH_PADS[this.activeLaunchPadIndex]
       const dragX = pointer.worldX - this.aimStartPoint.x
       const dragY = pointer.worldY - this.aimStartPoint.y
       const dragDist = Math.sqrt(dragX * dragX + dragY * dragY)
@@ -3239,8 +3262,8 @@ export class BattlePhase implements Phase {
 
       // 力道指示線
       const lineLen = 40 + power * 60
-      const endX = LAUNCH_PAD_X + Math.cos(launchAngle) * lineLen
-      const endY = LAUNCH_PAD_Y + Math.sin(launchAngle) * lineLen
+      const endX = activePad.x + Math.cos(launchAngle) * lineLen
+      const endY = activePad.y + Math.sin(launchAngle) * lineLen
 
       // 虛線效果
       this.aimLine.lineStyle(2, 0xffcc44, 0.8)
@@ -3250,10 +3273,10 @@ export class BattlePhase implements Phase {
           const t0 = i / segments
           const t1 = (i + 1) / segments
           this.aimLine.lineBetween(
-            LAUNCH_PAD_X + Math.cos(launchAngle) * lineLen * t0,
-            LAUNCH_PAD_Y + Math.sin(launchAngle) * lineLen * t0,
-            LAUNCH_PAD_X + Math.cos(launchAngle) * lineLen * t1,
-            LAUNCH_PAD_Y + Math.sin(launchAngle) * lineLen * t1,
+            activePad.x + Math.cos(launchAngle) * lineLen * t0,
+            activePad.y + Math.sin(launchAngle) * lineLen * t0,
+            activePad.x + Math.cos(launchAngle) * lineLen * t1,
+            activePad.y + Math.sin(launchAngle) * lineLen * t1,
           )
         }
       }
@@ -3274,13 +3297,13 @@ export class BattlePhase implements Phase {
       // 力道色彩指示
       const powerColor = power > 0.7 ? 0xff4444 : power > 0.4 ? 0xffcc44 : 0x44ff44
       this.aimLine.lineStyle(3, powerColor, 0.6)
-      this.aimLine.strokeCircle(LAUNCH_PAD_X, LAUNCH_PAD_Y, LAUNCH_PAD_RADIUS + 2)
+      this.aimLine.strokeCircle(activePad.x, activePad.y, LAUNCH_PAD_RADIUS + 2)
 
       // 力道百分比文字
       const pct = Math.round(power * 100)
       const colorHex = powerColor === 0xff4444 ? '#ff4444' : powerColor === 0xffcc44 ? '#ffcc44' : '#44ff44'
       if (!this.aimPowerText) {
-        this.aimPowerText = this.scene.add.text(LAUNCH_PAD_X, LAUNCH_PAD_Y + LAUNCH_PAD_RADIUS + 12, '', {
+        this.aimPowerText = this.scene.add.text(activePad.x, activePad.y + LAUNCH_PAD_RADIUS + 12, '', {
           fontSize: '12px', fontStyle: 'bold',
           stroke: '#000000', strokeThickness: 2,
         })
@@ -3967,16 +3990,16 @@ export class BattlePhase implements Phase {
     this.exitAimMode()
 
     // 發射台清理
-    if (this.launchPadGraphics) {
-      this.scene.tweens.killTweensOf(this.launchPadGraphics)
-      this.launchPadGraphics.destroy()
-      this.launchPadGraphics = null
+    for (const g of this.launchPadGraphicsList) {
+      this.scene.tweens.killTweensOf(g)
+      g.destroy()
     }
-    if (this.launchPadHighlight) {
-      this.scene.tweens.killTweensOf(this.launchPadHighlight)
-      this.launchPadHighlight.destroy()
-      this.launchPadHighlight = null
+    this.launchPadGraphicsList = []
+    for (const h of this.launchPadHighlightList) {
+      this.scene.tweens.killTweensOf(h)
+      h.destroy()
     }
+    this.launchPadHighlightList = []
 
     // 銷毀部署面板
     if (this.deployPanelContainer) {
