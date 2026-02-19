@@ -72,7 +72,7 @@ export class MenuScene extends Phaser.Scene {
     }
 
     // === 標題光暈底層 ===
-    const titleGlow = this.add.circle(width / 2, height * 0.3, 100, 0x5588aa, 0.15)
+    const titleGlow = this.add.circle(width / 2, height * 0.3, 100, 0xffaa33, 0.12)
     this.tweens.add({
       targets: titleGlow,
       alpha: 0.08,
@@ -86,11 +86,11 @@ export class MenuScene extends Phaser.Scene {
 
     // 遊戲標題（帶描邊 — ProjectDK 文字手法）
     const title = this.add.text(width / 2, height * 0.3, 'ProjectCircle', {
-      fontSize: '36px',
-      color: '#e8e8f0',
+      fontSize: '42px',
+      color: '#f0e8d8',
       fontStyle: 'bold',
-      stroke: '#1a1a30',
-      strokeThickness: 4,
+      stroke: '#0a0810',
+      strokeThickness: 5,
     })
     title.setOrigin(0.5)
     title.setAlpha(0)
@@ -116,10 +116,10 @@ export class MenuScene extends Phaser.Scene {
     })
 
     // 副標題（帶描邊）
-    const subtitle = this.add.text(width / 2, height * 0.3 + 44, 'Dungeon Defense', {
-      fontSize: '14px',
-      color: '#8888bb',
-      stroke: '#0c0c18',
+    const subtitle = this.add.text(width / 2, height * 0.3 + 50, '地牢防禦戰', {
+      fontSize: '16px',
+      color: '#a8a0b8',
+      stroke: '#0a0810',
       strokeThickness: 2,
     })
     subtitle.setOrigin(0.5)
@@ -133,13 +133,13 @@ export class MenuScene extends Phaser.Scene {
     })
 
     // === 按鈕（更大、有脈動邊框） ===
-    const buttonWidth = 220
-    const buttonHeight = 64
+    const buttonWidth = 260
+    const buttonHeight = 72
     const buttonX = width / 2
     const buttonY = height * 0.6
 
     // 按鈕底部光暈
-    const btnGlow = this.add.circle(buttonX, buttonY, 80, UI_ACCENT, 0.08)
+    const btnGlow = this.add.circle(buttonX, buttonY, 100, UI_ACCENT, 0.1)
     this.tweens.add({
       targets: btnGlow,
       alpha: 0.15,
@@ -174,7 +174,7 @@ export class MenuScene extends Phaser.Scene {
 
     // 按鈕文字（帶描邊）
     const buttonText = this.add.text(buttonX, buttonY, '開始遊戲', {
-      fontSize: '24px',
+      fontSize: '28px',
       color: '#ffffff',
       fontStyle: 'bold',
       stroke: '#000000',

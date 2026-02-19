@@ -29,16 +29,16 @@ export class UIScene extends Phaser.Scene {
     // Top bar — 多層漸層條（ProjectDK 風格）
     const topBarGfx = this.add.graphics()
     // 主背景
-    topBarGfx.fillStyle(0x0c0c18, 0.92)
+    topBarGfx.fillStyle(0x1a1428, 0.92)
     topBarGfx.fillRect(0, 0, width, TOP_BAR_HEIGHT)
     // 上半較亮（模擬光照）
-    topBarGfx.fillStyle(0x1a1a2e, 0.4)
+    topBarGfx.fillStyle(0x221a30, 0.4)
     topBarGfx.fillRect(0, 0, width, Math.floor(TOP_BAR_HEIGHT * 0.45))
     // 底部亮線（分隔線）
-    topBarGfx.lineStyle(1, 0x3a3a5e, 0.7)
+    topBarGfx.lineStyle(1, 0x6a5acd, 0.7)
     topBarGfx.lineBetween(0, TOP_BAR_HEIGHT, width, TOP_BAR_HEIGHT)
     // 底部發光線
-    topBarGfx.lineStyle(1, 0x5588aa, 0.2)
+    topBarGfx.lineStyle(1, 0x8a7ae8, 0.25)
     topBarGfx.lineBetween(0, TOP_BAR_HEIGHT - 1, width, TOP_BAR_HEIGHT - 1)
 
     // HUD - 金幣圖示 + 顯示 (左側) — 更大
@@ -46,7 +46,7 @@ export class UIScene extends Phaser.Scene {
     goldIcon.setScale(2.5)
     this.goldBadge = createTextBadge(this, 62, TOP_BAR_HEIGHT / 2, '$0', {
       fontSize: '18px',
-      color: '#ffcc44',
+      color: '#ffd700',
       bgAlpha: 0.6,
       paddingX: 10,
       paddingY: 4,
@@ -57,15 +57,15 @@ export class UIScene extends Phaser.Scene {
     waveIcon.setScale(2.5)
     this.roomBadge = createTextBadge(this, width - 44, TOP_BAR_HEIGHT / 2, '0/5', {
       fontSize: '18px',
-      color: '#eeeeee',
+      color: '#f0e8d8',
       bgAlpha: 0.6,
       paddingX: 10,
       paddingY: 4,
     })
 
     // Battle HUD - 波次指示 (頂部置中，帶描邊)
-    this.waveText = this.add.text(width / 2, TOP_BAR_HEIGHT / 2 - 6, '', {
-      fontSize: '16px',
+    this.waveText = this.add.text(width / 2, TOP_BAR_HEIGHT / 2 - 7, '', {
+      fontSize: '18px',
       color: '#ffffff',
       fontFamily: 'monospace',
       fontStyle: 'bold',
@@ -76,9 +76,9 @@ export class UIScene extends Phaser.Scene {
     this.waveText.setVisible(false)
 
     // Battle HUD - 剩餘敵人 (波次文字下方)
-    this.enemiesText = this.add.text(width / 2, TOP_BAR_HEIGHT / 2 + 12, '', {
-      fontSize: '12px',
-      color: '#aaaaaa',
+    this.enemiesText = this.add.text(width / 2, TOP_BAR_HEIGHT / 2 + 13, '', {
+      fontSize: '14px',
+      color: '#a8a0b8',
       fontFamily: 'monospace',
       stroke: '#000000',
       strokeThickness: 2,
@@ -122,7 +122,7 @@ export class UIScene extends Phaser.Scene {
       goldTextObj.setColor(gained ? '#44ff66' : '#ff4444')
       this.time.delayedCall(300, () => {
         if (goldTextObj.active) {
-          goldTextObj.setColor('#d4aa44')
+          goldTextObj.setColor('#ffd700')
         }
       })
     }
@@ -138,7 +138,7 @@ export class UIScene extends Phaser.Scene {
     // 更新戰鬥 HUD
     const { battleState } = run
     if (battleState.isActive) {
-      const newWaveStr = `Wave ${battleState.currentWave}/${battleState.totalWaves}`
+      const newWaveStr = `第 ${battleState.currentWave} 波 / 共 ${battleState.totalWaves} 波`
       if (this.waveText.text !== newWaveStr) {
         this.waveText.setText(newWaveStr)
         // 波次切換 scale 動畫
@@ -155,12 +155,12 @@ export class UIScene extends Phaser.Scene {
       }
       this.waveText.setVisible(true)
 
-      this.enemiesText.setText(`Enemies: ${battleState.enemiesRemaining}`)
+      this.enemiesText.setText(`剩餘敵人：${battleState.enemiesRemaining}`)
       // 低敵人數量脈動
       if (battleState.enemiesRemaining <= 2 && battleState.enemiesRemaining > 0) {
-        this.enemiesText.setColor('#ffaa44')
+        this.enemiesText.setColor('#ffaa33')
       } else {
-        this.enemiesText.setColor('#999999')
+        this.enemiesText.setColor('#a8a0b8')
       }
       this.enemiesText.setVisible(true)
     } else {
@@ -181,7 +181,7 @@ export class UIScene extends Phaser.Scene {
     const bgHeight = textObj.height + paddingY * 2
 
     bgGfx.clear()
-    bgGfx.fillStyle(0x0c0c14, 0.5)
+    bgGfx.fillStyle(0x1a1428, 0.5)
     bgGfx.fillRoundedRect(-bgWidth / 2, -bgHeight / 2, bgWidth, bgHeight, bgHeight / 2)
   }
 
