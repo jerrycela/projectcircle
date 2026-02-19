@@ -47,6 +47,16 @@ export const UI_GOLD = 0xffd700;
 export const UI_DANGER = 0xff5555;
 export const UI_SUCCESS = 0x55dd88;
 
+// UI 色彩 HEX 字串格式（供 Phaser Text style 使用）
+export const UI_TEXT_HEX = '#f0e8d8';
+export const UI_TEXT_DIM_HEX = '#a8a0b8';
+export const UI_GOLD_HEX = '#ffd700';
+export const UI_ACCENT_HEX = '#ffaa33';
+export const UI_DANGER_HEX = '#ff5555';
+export const UI_SUCCESS_HEX = '#55dd88';
+export const ALLY_COLOR_HEX = '#55bbdd';
+export const ENEMY_COLOR_HEX = '#dd8844';
+
 // 房間環境色
 export const ROOM_FLOOR = 0x1a1a22;
 export const ROOM_WALL = 0x0e0e16;

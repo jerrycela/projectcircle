@@ -252,6 +252,7 @@ export class ResultPhase implements Phase {
         duration: 500,
         ease: 'Quad.easeOut',
         onUpdate: () => {
+          if (!fillGfx.active) return
           fillGfx.clear()
           const fillW = barWidth * fillAnim.ratio
           if (fillW > 0) {
@@ -689,6 +690,8 @@ export class ResultPhase implements Phase {
         fontSize: '12px',
         color: '#aaddff',
         wordWrap: { width: w - 8 },
+        stroke: '#000000',
+        strokeThickness: 2,
       }
     )
     this.gameObjects.push(effectText)
@@ -704,6 +707,8 @@ export class ResultPhase implements Phase {
         fontSize: '12px',
         color: `#${UI_TEXT_DIM.toString(16)}`,
         wordWrap: { width: w - 8 },
+        stroke: '#000000',
+        strokeThickness: 2,
       }
     )
     this.gameObjects.push(dimText)
@@ -722,10 +727,12 @@ export class ResultPhase implements Phase {
       x + 4, y + 130,
       room.description,
       {
-        fontSize: '11px',
+        fontSize: '12px',
         color: `#${UI_TEXT_DIM.toString(16)}`,
         wordWrap: { width: w - 8 },
         lineSpacing: 3,
+        stroke: '#000000',
+        strokeThickness: 2,
       }
     )
     this.gameObjects.push(desc)
@@ -939,7 +946,10 @@ export class ResultPhase implements Phase {
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
-      onUpdate: (tween) => drawRetryBorder(tween.getValue() ?? 0.5),
+      onUpdate: (tween) => {
+        if (!btnBorderGfx.active) return
+        drawRetryBorder(tween.getValue() ?? 0.5)
+      },
     })
 
     // Invisible hit area for button interaction

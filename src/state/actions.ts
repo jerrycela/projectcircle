@@ -251,29 +251,6 @@ export function updateEnemiesRemaining(state: RunState, count: number): RunState
 }
 
 /**
- * 從庫存移除一隻怪物實例（發射後消耗）
- * 找到第一個符合 monsterId 的實例並移除
- */
-export function consumeMonsterFromInventory(
-  state: RunState,
-  monsterId: string
-): RunState {
-  const index = state.monsters.findIndex(m => m.monsterId === monsterId)
-  if (index === -1) {
-    console.warn(`consumeMonsterFromInventory: monster ${monsterId} not found`)
-    return state
-  }
-
-  const newMonsters = [...state.monsters]
-  newMonsters.splice(index, 1)
-
-  return {
-    ...state,
-    monsters: newMonsters,
-  }
-}
-
-/**
  * 新增怪物到局內（房間組合解鎖）
  * 如果同 ID 已存在則跳過
  */

@@ -3,6 +3,7 @@ import { gameStore } from '../state/game-store'
 import { DATA_CONSTANTS } from '../data/schemas'
 import { createTextBadge } from '../utils/visual-factory'
 import { TEXTURE_KEYS } from '../utils/texture-factory'
+import { UI_GOLD_HEX, UI_TEXT_HEX, UI_TEXT_DIM_HEX, UI_ACCENT_HEX } from '../config/constants'
 import type { GameState } from '../state/game-state'
 
 const TOP_BAR_HEIGHT = 48
@@ -44,9 +45,9 @@ export class UIScene extends Phaser.Scene {
     // HUD - 金幣圖示 + 顯示 (左側) — 更大
     const goldIcon = this.add.sprite(20, TOP_BAR_HEIGHT / 2, TEXTURE_KEYS.ICON_GOLD)
     goldIcon.setScale(2.5)
-    this.goldBadge = createTextBadge(this, 62, TOP_BAR_HEIGHT / 2, '$0', {
+    this.goldBadge = createTextBadge(this, 62, TOP_BAR_HEIGHT / 2, '0', {
       fontSize: '18px',
-      color: '#ffd700',
+      color: UI_GOLD_HEX,
       bgAlpha: 0.6,
       paddingX: 10,
       paddingY: 4,
@@ -57,7 +58,7 @@ export class UIScene extends Phaser.Scene {
     waveIcon.setScale(2.5)
     this.roomBadge = createTextBadge(this, width - 44, TOP_BAR_HEIGHT / 2, '0/5', {
       fontSize: '18px',
-      color: '#f0e8d8',
+      color: UI_TEXT_HEX,
       bgAlpha: 0.6,
       paddingX: 10,
       paddingY: 4,
@@ -78,7 +79,7 @@ export class UIScene extends Phaser.Scene {
     // Battle HUD - 剩餘敵人 (波次文字下方)
     this.enemiesText = this.add.text(width / 2, TOP_BAR_HEIGHT / 2 + 13, '', {
       fontSize: '14px',
-      color: '#a8a0b8',
+      color: UI_TEXT_DIM_HEX,
       fontFamily: 'monospace',
       stroke: '#000000',
       strokeThickness: 2,
@@ -104,7 +105,7 @@ export class UIScene extends Phaser.Scene {
 
     // 更新金幣
     const goldTextObj = this.goldBadge.getData('textObj') as Phaser.GameObjects.Text
-    goldTextObj.setText(`$${run.gold}`)
+    goldTextObj.setText(`${run.gold}`)
     this.rebuildBadgeBg(this.goldBadge)
 
     // 金幣變化時 scale bounce + 色彩閃光
@@ -122,7 +123,7 @@ export class UIScene extends Phaser.Scene {
       goldTextObj.setColor(gained ? '#44ff66' : '#ff4444')
       this.time.delayedCall(300, () => {
         if (goldTextObj.active) {
-          goldTextObj.setColor('#ffd700')
+          goldTextObj.setColor(UI_GOLD_HEX)
         }
       })
     }
@@ -158,9 +159,9 @@ export class UIScene extends Phaser.Scene {
       this.enemiesText.setText(`剩餘敵人：${battleState.enemiesRemaining}`)
       // 低敵人數量脈動
       if (battleState.enemiesRemaining <= 2 && battleState.enemiesRemaining > 0) {
-        this.enemiesText.setColor('#ffaa33')
+        this.enemiesText.setColor(UI_ACCENT_HEX)
       } else {
-        this.enemiesText.setColor('#a8a0b8')
+        this.enemiesText.setColor(UI_TEXT_DIM_HEX)
       }
       this.enemiesText.setVisible(true)
     } else {

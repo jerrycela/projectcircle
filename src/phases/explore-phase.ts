@@ -15,6 +15,7 @@ import {
   UI_TEXT,
   UI_TEXT_DIM,
   UI_ACCENT,
+  UI_BG,
   UI_GOLD,
 } from '../config/constants'
 import { drawPanel } from '../utils/visual-factory'
@@ -221,7 +222,7 @@ export class ExplorePhase implements Phase {
       }
 
       // 內圈填充（半透明暗色）
-      g.fillStyle(0x1a1428, 0.35)
+      g.fillStyle(UI_BG, 0.35)
       g.fillCircle(sx, sy, SLOT_RADIUS - 4)
 
       // 槽位中心脈動光環（更明顯）
@@ -396,7 +397,7 @@ export class ExplorePhase implements Phase {
     }
 
     const diamondGfx = this.scene.add.graphics()
-    const diamondColor = distance >= 3 ? 0xcc4444 : distance === 2 ? UI_GOLD : 0x888899
+    const diamondColor = distance >= 3 ? 0xcc4444 : distance === 2 ? UI_GOLD : UI_TEXT_DIM
     const diamondSize = 5
     diamondGfx.fillStyle(diamondColor, 1)
     diamondGfx.beginPath()
@@ -601,6 +602,8 @@ export class ExplorePhase implements Phase {
           color: maxReached
             ? '#FF4444'
             : `#${UI_TEXT_DIM.toString(16).padStart(6, '0')}`,
+          stroke: '#000000',
+          strokeThickness: 2,
         },
       )
       limitText.setOrigin(0.5)

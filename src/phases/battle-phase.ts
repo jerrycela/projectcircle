@@ -35,8 +35,11 @@ import {
   WAVE_INTERVAL,
   ENEMY_SPAWN_INTERVAL,
   UI_TEXT,
+  UI_TEXT_DIM,
   UI_ACCENT,
+  UI_BG,
   UI_BORDER,
+  UI_BORDER_LIGHT,
   UI_SUCCESS,
   UI_DANGER,
 } from '../config/constants'
@@ -250,6 +253,9 @@ export class BattlePhase implements Phase {
   private pendingTraps: number = 0
   private trapPlaceMode: boolean = false
   private trapPlaceButton: Phaser.GameObjects.Container | null = null
+
+  private updateListeners: Array<{ fn: Function }> = []
+  private loopTimers: Phaser.Time.TimerEvent[] = []
 
   // 機關槍連射系統
   private burstQueue: Array<{ monsterInstance: MonsterInstance; monsterDef: MonsterDefinition; evolution: EvolutionDefinition | null }> = []
@@ -520,7 +526,7 @@ export class BattlePhase implements Phase {
 
     // 牆壁內側高光線條（ProjectDK 發光邊線手法）
     const wallGlow = this.scene.add.graphics()
-    wallGlow.lineStyle(1, 0x5588aa, 0.2)
+    wallGlow.lineStyle(1, UI_BORDER_LIGHT, 0.2)
     // 頂部內光線
     wallGlow.lineBetween(ROOM_X + 8, ROOM_Y + wallThickness + 1, ROOM_X + ROOM_WIDTH - 8, ROOM_Y + wallThickness + 1)
     // 左側內光線
@@ -584,7 +590,7 @@ export class BattlePhase implements Phase {
 
     // 牆壁內側高光線條
     const wallGlow = this.scene.add.graphics()
-    wallGlow.lineStyle(1, 0x5588aa, 0.2)
+    wallGlow.lineStyle(1, UI_BORDER_LIGHT, 0.2)
     wallGlow.lineBetween(ROOM_X + 8, ROOM_Y + 7, ROOM_X + ROOM_WIDTH - 8, ROOM_Y + 7)
     wallGlow.lineBetween(ROOM_X + 7, ROOM_Y + 8, ROOM_X + 7, ROOM_Y + ROOM_HEIGHT - 8)
     this.battleOverlayElements.push(wallGlow)
@@ -1777,13 +1783,15 @@ export class BattlePhase implements Phase {
       repeat: -1,
     })
     // 光暈跟隨精靈（每幀更新）
-    this.scene.events.on('update', () => {
+    const updateFn = () => {
       if (unit.alive && glow.active) {
         glow.setPosition(unit.sprite.x, unit.sprite.y + 4)
       } else if (glow.active) {
         glow.destroy()
       }
-    })
+    }
+    this.scene.events.on('update', updateFn)
+    this.updateListeners.push({ fn: updateFn })
   }
 
   /** 進化型持續視覺效果 */
@@ -1825,13 +1833,15 @@ export class BattlePhase implements Phase {
       yoyo: true,
       repeat: -1,
     })
-    this.scene.events.on('update', () => {
+    const updateFn = () => {
       if (unit.alive && glow.active) {
         glow.setPosition(unit.sprite.x, unit.sprite.y + 4)
       } else if (glow.active) {
         glow.destroy()
       }
-    })
+    }
+    this.scene.events.on('update', updateFn)
+    this.updateListeners.push({ fn: updateFn })
   }
 
   /** 刺客殘影拖尾效果 */
@@ -1840,7 +1850,7 @@ export class BattlePhase implements Phase {
     let lastX = unit.sprite.x
     let lastY = unit.sprite.y
 
-    this.scene.events.on('update', () => {
+    const updateFn = () => {
       if (!unit.alive || !unit.sprite.active) return
       const dx = unit.sprite.x - lastX
       const dy = unit.sprite.y - lastY
@@ -1859,7 +1869,9 @@ export class BattlePhase implements Phase {
       }
       lastX = unit.sprite.x
       lastY = unit.sprite.y
-    })
+    }
+    this.scene.events.on('update', updateFn)
+    this.updateListeners.push({ fn: updateFn })
   }
 
   /** 法師魔法粒子環繞效果 */
@@ -1874,7 +1886,7 @@ export class BattlePhase implements Phase {
       particles.push(p)
     }
 
-    this.scene.events.on('update', () => {
+    const updateFn = () => {
       if (!unit.alive || !unit.sprite.active) {
         for (const p of particles) {
           if (p.active) p.destroy()
@@ -1892,13 +1904,15 @@ export class BattlePhase implements Phase {
         )
         p.setAlpha(0.3 + Math.sin(a * 2) * 0.3)
       }
-    })
+    }
+    this.scene.events.on('update', updateFn)
+    this.updateListeners.push({ fn: updateFn })
   }
 
   /** 鐵甲護甲閃光效果 */
   private addArmorShimmer(unit: BattleUnit): void {
     if (!unit.sprite.active) return
-    this.scene.time.addEvent({
+    const timer = this.scene.time.addEvent({
       delay: 2000 + Math.random() * 1000,
       loop: true,
       callback: () => {
@@ -1912,6 +1926,7 @@ export class BattlePhase implements Phase {
         })
       },
     })
+    this.loopTimers.push(timer)
   }
 
   /** 進化型攻擊特效 */
@@ -2183,7 +2198,7 @@ export class BattlePhase implements Phase {
   private spawnLandingVFX(x: number, y: number): void {
     // 塵土環擴散
     const ring = this.scene.add.circle(x, y + 2, 4, 0x888888, 0)
-    ring.setStrokeStyle(1.5, 0x888899, 0.6)
+    ring.setStrokeStyle(1.5, UI_TEXT_DIM, 0.6)
     this.scene.tweens.add({
       targets: ring,
       scaleX: 3,
@@ -2198,7 +2213,7 @@ export class BattlePhase implements Phase {
     for (let i = 0; i < 3; i++) {
       const angle = (i / 3) * Math.PI + Math.random() * 0.4 + Math.PI
       const dist = 10 + Math.random() * 8
-      const p = this.scene.add.circle(x, y + 2, 1.5, 0x888899, 0.6)
+      const p = this.scene.add.circle(x, y + 2, 1.5, UI_TEXT_DIM, 0.6)
       this.scene.tweens.add({
         targets: p,
         x: x + Math.cos(angle) * dist,
@@ -2406,7 +2421,7 @@ export class BattlePhase implements Phase {
       const routeLabel = this.scene.add.text(
         x + width - 6, y + 4,
         evo.path.route,
-        { fontSize: '10px', color: `#${evoColor.toString(16).padStart(6, '0')}`, fontStyle: 'bold' }
+        { fontSize: '12px', color: `#${evoColor.toString(16).padStart(6, '0')}`, fontStyle: 'bold' }
       )
       routeLabel.setOrigin(0.5)
       container.add(routeLabel)
@@ -2519,7 +2534,7 @@ export class BattlePhase implements Phase {
       }
 
       // 更新數量角標（Fix B）
-      const currentCount = runMonsters.filter(m => m.monsterId === card.monsterId).length - (this.launchCounts[card.monsterId] || 0)
+      const currentCount = Math.max(0, runMonsters.filter(m => m.monsterId === card.monsterId).length - (this.launchCounts[card.monsterId] || 0))
       card.countText.setText(`x${currentCount}`)
     }
   }
@@ -2533,7 +2548,7 @@ export class BattlePhase implements Phase {
       this.launchPadGraphicsList.push(g)
 
       // 外圈光暈底（大範圍柔光）
-      const padGlow = this.scene.add.circle(pad.x, pad.y, LAUNCH_PAD_RADIUS + 12, 0x5588aa, 0.08)
+      const padGlow = this.scene.add.circle(pad.x, pad.y, LAUNCH_PAD_RADIUS + 12, UI_BORDER_LIGHT, 0.08)
       this.roomTileSprites.push(padGlow)
       this.scene.tweens.add({
         targets: padGlow,
@@ -2547,7 +2562,7 @@ export class BattlePhase implements Phase {
       })
 
       // 最外圈（虛線感覺 — 用 4 段弧線）
-      g.lineStyle(1.5, 0x5588aa, 0.4)
+      g.lineStyle(1.5, UI_BORDER_LIGHT, 0.4)
       for (let arc = 0; arc < 4; arc++) {
         const startAngle = arc * Math.PI / 2 + 0.15
         const endAngle = startAngle + Math.PI / 2 - 0.3
@@ -2614,7 +2629,7 @@ export class BattlePhase implements Phase {
     this.hidePicker(true)
 
     const runState = gameStore.getState().run
-    const instanceCount = runState.monsters.filter(m => m.monsterId === monsterId).length - (this.launchCounts[monsterId] || 0)
+    const instanceCount = Math.max(0, runState.monsters.filter(m => m.monsterId === monsterId).length - (this.launchCounts[monsterId] || 0))
     const aliveAllies = this.units.filter(u => u.faction === 'ally' && u.alive).length
     this.pickerMax = Math.min(instanceCount, Math.max(0, this.getEffectiveAllyLimit() - aliveAllies))
 
@@ -2716,7 +2731,7 @@ export class BattlePhase implements Phase {
 
     // 背景
     const bg = this.scene.add.graphics()
-    bg.fillStyle(0x1a1428, 0.95)
+    bg.fillStyle(UI_BG, 0.95)
     bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8)
     bg.lineStyle(2, UI_BORDER, 0.9)
     bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8)
@@ -2792,7 +2807,7 @@ export class BattlePhase implements Phase {
 
     // 分隔線
     const divGfx = this.scene.add.graphics()
-    divGfx.lineStyle(1, 0x6a5acd, 0.5)
+    divGfx.lineStyle(1, UI_BORDER, 0.5)
     divGfx.lineBetween(-w / 2 + btnW, -h / 2 + 4, -w / 2 + btnW, h / 2 - 4)
     divGfx.lineBetween(w / 2 - btnW, -h / 2 + 4, w / 2 - btnW, h / 2 - 4)
     this.pickerContainer.add(divGfx)
@@ -3631,7 +3646,7 @@ export class BattlePhase implements Phase {
     container.add(bg)
 
     const label = this.scene.add.text(0, -10, '治癒', {
-      fontSize: '11px', color: '#44ff44',
+      fontSize: '12px', color: '#44ff44',
     })
     label.setOrigin(0.5)
     container.add(label)
@@ -3755,7 +3770,7 @@ export class BattlePhase implements Phase {
     this.trapPlaceButton = container
 
     const bg = this.scene.add.rectangle(0, 0, btnSize, btnSize, 0x662222)
-    bg.setStrokeStyle(2, 0xff4444)
+    bg.setStrokeStyle(2, UI_DANGER)
     bg.setInteractive({ useHandCursor: true })
     container.add(bg)
 
@@ -4005,6 +4020,18 @@ export class BattlePhase implements Phase {
       }
     }
     this.units = []
+
+    // 清理 update 監聽器
+    for (const listener of this.updateListeners) {
+      this.scene.events.off('update', listener.fn as any)
+    }
+    this.updateListeners = []
+
+    // 清理循環計時器
+    for (const timer of this.loopTimers) {
+      timer.destroy()
+    }
+    this.loopTimers = []
 
     // 連射系統清理
     this.burstQueue = []

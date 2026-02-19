@@ -4,144 +4,12 @@
  */
 
 import Phaser from 'phaser';
-import type { MonsterType, HeroType, Faction } from '../config/constants';
 import {
-  ALLY_COLOR,
-  ALLY_OUTLINE,
-  ENEMY_COLOR,
-  ENEMY_OUTLINE,
-  ROOM_FLOOR,
-  ROOM_WALL,
-  ROOM_ACCENT,
-  ROOM_FLOOR_TILE,
   UI_BG,
   UI_BORDER,
   UI_BORDER_LIGHT,
-  TILE_SIZE,
+  UI_TEXT_HEX,
 } from '../config/constants';
-
-/**
- * 建立怪物圖形
- * - 圓形 = 肉盾 (食人魔)
- * - 三角形 = 輸出 (哥布林)
- * - 菱形 = 遠程 (骷髏兵)
- */
-export function createMonsterGraphics(
-  scene: Phaser.Scene,
-  type: MonsterType,
-  faction: Faction = 'ally'
-): Phaser.GameObjects.Graphics {
-  const graphics = scene.add.graphics();
-  const size = TILE_SIZE / 2;
-  const color = faction === 'ally' ? ALLY_COLOR : ENEMY_COLOR;
-  const outline = faction === 'ally' ? ALLY_OUTLINE : ENEMY_OUTLINE;
-
-  graphics.lineStyle(2, outline, 1);
-  graphics.fillStyle(color, 1);
-
-  switch (type) {
-    case 'ogre': // 圓形 - 肉盾
-      graphics.fillCircle(0, 0, size);
-      graphics.strokeCircle(0, 0, size);
-      break;
-
-    case 'goblin': // 三角形 - 輸出
-      graphics.beginPath();
-      graphics.moveTo(0, -size);
-      graphics.lineTo(size, size);
-      graphics.lineTo(-size, size);
-      graphics.closePath();
-      graphics.fillPath();
-      graphics.strokePath();
-      break;
-
-    case 'skeleton': // 菱形 - 遠程
-      graphics.beginPath();
-      graphics.moveTo(0, -size);
-      graphics.lineTo(size, 0);
-      graphics.lineTo(0, size);
-      graphics.lineTo(-size, 0);
-      graphics.closePath();
-      graphics.fillPath();
-      graphics.strokePath();
-      break;
-  }
-
-  return graphics;
-}
-
-/**
- * 建立英雄圖形
- * - 正方形 = 冒險者
- * - 六邊形 = 聖騎士
- */
-export function createHeroGraphics(
-  scene: Phaser.Scene,
-  type: HeroType
-): Phaser.GameObjects.Graphics {
-  const graphics = scene.add.graphics();
-  const size = TILE_SIZE / 2;
-  const color = ENEMY_COLOR;
-  const outline = ENEMY_OUTLINE;
-
-  graphics.lineStyle(2, outline, 1);
-  graphics.fillStyle(color, 1);
-
-  switch (type) {
-    case 'adventurer': // 正方形
-      graphics.fillRect(-size, -size, size * 2, size * 2);
-      graphics.strokeRect(-size, -size, size * 2, size * 2);
-      break;
-
-    case 'paladin': // 六邊形（較大）
-      graphics.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i;
-        const x = Math.cos(angle) * size * 1.2;
-        const y = Math.sin(angle) * size * 1.2;
-        if (i === 0) {
-          graphics.moveTo(x, y);
-        } else {
-          graphics.lineTo(x, y);
-        }
-      }
-      graphics.closePath();
-      graphics.fillPath();
-      graphics.strokePath();
-      break;
-  }
-
-  return graphics;
-}
-
-/**
- * 建立房間圖形（地板底色）
- */
-export function createRoomGraphics(
-  scene: Phaser.Scene,
-  width: number,
-  height: number
-): Phaser.GameObjects.Graphics {
-  const graphics = scene.add.graphics();
-
-  // 地板
-  graphics.fillStyle(ROOM_FLOOR, 1);
-  graphics.fillRect(0, 0, width, height);
-
-  // 邊框
-  graphics.lineStyle(4, ROOM_WALL, 1);
-  graphics.strokeRect(0, 0, width, height);
-
-  // 角落裝飾
-  const cornerSize = 8;
-  graphics.fillStyle(ROOM_ACCENT, 1);
-  graphics.fillRect(0, 0, cornerSize, cornerSize);
-  graphics.fillRect(width - cornerSize, 0, cornerSize, cornerSize);
-  graphics.fillRect(0, height - cornerSize, cornerSize, cornerSize);
-  graphics.fillRect(width - cornerSize, height - cornerSize, cornerSize, cornerSize);
-
-  return graphics;
-}
 
 // ============ DW3 共用視覺工具 ============
 
@@ -252,7 +120,7 @@ export function createTextBadge(
 ): Phaser.GameObjects.Container {
   const {
     fontSize = '14px',
-    color = '#eeeeee',
+    color = UI_TEXT_HEX,
     bgAlpha = 0.6,
     paddingX = 10,
     paddingY = 4,
@@ -319,36 +187,6 @@ export function spawnHitParticles(
         particle.destroy();
       },
     });
-  }
-}
-
-/**
- * 繪製地磚格紋圖案
- * 兩色交錯繪製（ROOM_FLOOR + ROOM_FLOOR_TILE）
- */
-export function drawFloorTiles(
-  graphics: Phaser.GameObjects.Graphics,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  tileSize: number = 20
-): void {
-  const cols = Math.ceil(width / tileSize);
-  const rows = Math.ceil(height / tileSize);
-
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const isAlt = (row + col) % 2 === 1;
-      const color = isAlt ? ROOM_FLOOR_TILE : ROOM_FLOOR;
-      graphics.fillStyle(color, 1);
-
-      const tileX = x + col * tileSize;
-      const tileY = y + row * tileSize;
-      const tw = Math.min(tileSize, x + width - tileX);
-      const th = Math.min(tileSize, y + height - tileY);
-      graphics.fillRect(tileX, tileY, tw, th);
-    }
   }
 }
 
@@ -459,9 +297,8 @@ export function spawnHeartParticles(
     const color = i % 2 === 0 ? '#44ff44' : '#88ffaa';
 
     const heart = scene.add.text(x + offsetX, startY, '♥', {
-      fontSize: `${10 + Math.random() * 6}px`,
+      fontSize: `${12 + Math.random() * 4}px`,
       color,
-      fontFamily: 'monospace',
     });
     heart.setOrigin(0.5);
     heart.setAlpha(0.9);
