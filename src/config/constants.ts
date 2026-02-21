@@ -73,7 +73,11 @@ export const DEPLOY_COOLDOWNS = {
 
 // === 消耗品價格 ===
 export const CONSUMABLE_PRICES = {
-  trap: 30,
+  spike_trap: 15,
+  slow_swamp: 20,
+  bouncer: 35,
+  weaken_totem: 30,
+  alarm_bell: 25,
   heal: 30,
   reinforcement: 50,
   crystal: 40,
@@ -88,5 +92,5 @@ export const ECONOMY = {
 
 // === 單位類型 ===
 export type MonsterType = 'goblin' | 'skeleton' | 'ogre';
-export type HeroType = 'adventurer' | 'paladin';
+export type HeroType = 'adventurer' | 'paladin' | 'thief' | 'priest';
 export type Faction = 'ally' | 'enemy';

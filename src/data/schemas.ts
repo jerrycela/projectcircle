@@ -185,6 +185,75 @@ export interface AffixDefinition {
   readonly description: string
 }
 
+// ============ 陷阱系統 ============
+
+export type TrapCategory =
+  | 'instant_damage'    // One-time damage (spike)
+  | 'persistent_area'   // Continuous area effect (swamp, totem)
+  | 'displacement'      // One-time knockback (bouncer)
+  | 'buff_trigger'      // One-time buff activation (alarm)
+
+export interface TrapDefinition {
+  readonly id: string
+  readonly name: string
+  readonly category: TrapCategory
+  readonly cost: number
+  readonly sellbackRatio: number        // 0.5 = get 50% back when selling
+  readonly triggerRadius: number        // pixels
+  readonly description: string
+  // Category-specific params
+  readonly damagePercent?: number       // instant_damage: % of max HP
+  readonly slowPercent?: number         // persistent_area (swamp): speed reduction 0-1
+  readonly damageMultiplier?: number    // persistent_area (totem): incoming damage multiplier (1.5 = +50%)
+  readonly displacement?: {             // displacement (bouncer): knockback params
+    readonly force: number              // knockback force in pixels
+    readonly enemyOnly: boolean         // true = only affects enemies
+  }
+  readonly buffEffect?: {               // buff_trigger (alarm): buff params
+    readonly attackSpeedMultiplier: number  // e.g. 1.3 = +30%
+    readonly duration: number              // ms
+    readonly radius: number                // buff radius in pixels
+  }
+}
+
+export interface PlacedTrapData {
+  readonly trapId: string          // unique instance ID
+  readonly definitionId: string    // references TrapDefinition.id
+  readonly x: number
+  readonly y: number
+}
+
+// ============ Level Layout System ============
+
+export interface ObstacleData {
+  readonly x: number          // pixels relative to ROOM_X
+  readonly y: number          // pixels relative to ROOM_Y
+  readonly width: number      // pixels
+  readonly height: number     // pixels
+  readonly type: 'wall' | 'destructible'
+  readonly hp?: number        // only for 'destructible', default 100
+}
+
+export interface WaypointPath {
+  readonly points: ReadonlyArray<{ readonly x: number; readonly y: number }>  // relative to ROOM_X/ROOM_Y
+}
+
+export interface LaunchPadPosition {
+  readonly x: number  // relative to ROOM_X
+  readonly y: number  // relative to ROOM_Y
+}
+
+export interface LevelLayout {
+  readonly id: string
+  readonly name: string
+  readonly obstacles: readonly ObstacleData[]
+  readonly launchPads: readonly LaunchPadPosition[]
+  readonly waypoints: Readonly<Record<string, WaypointPath>>  // key = breach direction
+  readonly allowedBreachDirections: readonly string[]
+  readonly crystalPosition?: { readonly x: number; readonly y: number }  // Phase 3
+  readonly maxTraps?: number  // optional trap placement limit
+}
+
 // ============ 消耗品系統 ============
 
 export interface ConsumableDefinition {

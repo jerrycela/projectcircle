@@ -3,6 +3,8 @@
  * 定義局內狀態和帳號狀態的介面
  */
 
+import type { AffixType, PlacedTrapData } from '../data/schemas'
+
 // 怪物擁有狀態 (帳號永久)
 export interface MonsterOwnership {
   monsterId: string
@@ -38,6 +40,13 @@ export interface RunState {
   gold: number
   phase: 'explore' | 'battle' | 'result'
   battleState: BattleState
+  trapInventory: Record<string, number>   // trapDefinitionId -> count owned
+  placedTraps: PlacedTrapData[]           // traps placed on current room
+  currentAffix: AffixType | null          // room affix for current battle
+  currentLayoutId: string | null          // level layout template for current battle
+  crystalHP: number              // current crystal HP (persists across battles in same room)
+  crystalMaxHP: number           // crystal max HP
+  crystalsIntact: number         // count of rooms where crystal survived
 }
 
 // 帳號狀態 (永久)
@@ -68,6 +77,13 @@ export function createInitialRunState(): RunState {
       totalWaves: 0,
       enemiesRemaining: 0,
     },
+    trapInventory: {},
+    placedTraps: [],
+    currentAffix: null,
+    currentLayoutId: null,
+    crystalHP: 250,
+    crystalMaxHP: 250,
+    crystalsIntact: 0,
   }
 }
 

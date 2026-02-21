@@ -5,6 +5,9 @@ import type { Direction, GridPosition } from '../systems/dungeon-grid'
 import { DATA_CONSTANTS } from '../data/schemas'
 import { TEXTURE_KEYS } from '../utils/texture-factory'
 import { createTextBadge } from '../utils/visual-factory'
+import { selectLayoutForDistance } from '../data/layouts/index'
+import { setRoomLayout } from '../state/actions'
+import { gameStore } from '../state/game-store'
 
 export class DungeonScene extends Phaser.Scene {
   private phaseManager!: PhaseManager
@@ -49,6 +52,7 @@ export class DungeonScene extends Phaser.Scene {
     this.events.on('battle-lost', this.onBattleLost, this)
     this.events.on('result-complete', this.onResultComplete, this)
     this.events.on('run-over', this.onRunOver, this)
+    this.events.on('continue-defending', this.onContinueDefending, this)
 
     // 進入探索階段
     this.phaseManager.changePhase(PhaseType.EXPLORE)
@@ -71,6 +75,10 @@ export class DungeonScene extends Phaser.Scene {
     this.data.set('breachDirection', direction)
     this.data.set('roomDistance', data.distance)
     this.data.set('conqueredPosition', conqueredPosition)
+
+    // Select level layout for this room
+    const layout = selectLayoutForDistance(data.distance)
+    gameStore.dispatchRunState(run => setRoomLayout(run, layout.id))
 
     // 原地開戰：跳過 camera fade，保留房間圖形
     this.phaseManager.changePhase(PhaseType.BATTLE, {
@@ -278,11 +286,41 @@ export class DungeonScene extends Phaser.Scene {
     this.scene.start('MenuScene')
   }
 
+  /**
+   * 繼續守衛 -> 留在同一房間，以新的破牆方向再打一場
+   */
+  private onContinueDefending(): void {
+    // Stay in same room, go back to battle with a random available direction
+    const currentPos = this.data.get('currentPosition') as { x: number; y: number } | null
+    if (!currentPos) {
+      this.onResultComplete()
+      return
+    }
+
+    const availableDirections = this.dungeonGrid.getAvailableDirections(currentPos)
+    if (availableDirections.length === 0) {
+      // No available directions, force advance to normal result flow
+      this.onResultComplete()
+      return
+    }
+
+    // Pick random breach direction
+    const newDirection = availableDirections[Math.floor(Math.random() * availableDirections.length)]
+    this.data.set('breachDirection', newDirection)
+
+    // Keep extraDefendWaves as already set by ResultPhase
+    // Keep same roomDistance and layout — don't re-select
+
+    // Go directly to battle (no corridor transition)
+    this.phaseManager.changePhase(PhaseType.BATTLE)
+  }
+
   shutdown(): void {
     this.events.off('door-clicked', this.onDoorClicked, this)
     this.events.off('battle-won', this.onBattleWon, this)
     this.events.off('battle-lost', this.onBattleLost, this)
     this.events.off('result-complete', this.onResultComplete, this)
     this.events.off('run-over', this.onRunOver, this)
+    this.events.off('continue-defending', this.onContinueDefending, this)
   }
 }

@@ -15,17 +15,18 @@
 
 import Phaser from 'phaser'
 import type { Phase } from './phase-manager'
-import type { HeroDefinition, MonsterDefinition, BattleWaveConfig, WaveDefinition, EvolutionDefinition, DodgeReaction, PushReaction, TauntReaction } from '../data/schemas'
+import type { HeroDefinition, MonsterDefinition, BattleWaveConfig, WaveDefinition, EvolutionDefinition, DodgeReaction, PushReaction, TauntReaction, AffixDefinition, LevelLayout, ObstacleData } from '../data/schemas'
+import { getLayoutById, selectLayoutForDistance } from '../data/layouts/index'
 import { DATA_CONSTANTS } from '../data/schemas'
 import type { UpdateAIResult, UnitAI } from '../systems/ai-system'
 import { createUnitAI, updateAI, AIState } from '../systems/ai-system'
-import { calculateDamage, calculateTrapDamage, calculateBerserkerATK } from '../systems/combat-system'
+import { calculateDamage, calculateBerserkerATK } from '../systems/combat-system'
 import { TrapSystem } from '../systems/trap-system'
 import { DataRegistry } from '../data/registry'
 import { eventBus } from '../systems/event-bus'
 import { gameStore } from '../state/game-store'
 import type { MonsterInstance } from '../state/game-state'
-import { gainMonsterXP } from '../state/actions'
+import { gainMonsterXP, damageCrystal, recordCrystalSurvival } from '../state/actions'
 import {
   GAME_WIDTH,
   ROOM_WIDTH,
@@ -53,7 +54,7 @@ import {
   drawPanel,
   createTextBadge,
 } from '../utils/visual-factory'
-import { TEXTURE_KEYS, UNIT_TEXTURE_MAP, EVOLUTION_TINTS } from '../utils/texture-factory'
+import { TEXTURE_KEYS, UNIT_TEXTURE_MAP, EVOLUTION_TINTS, TRAP_TEXTURE_MAP } from '../utils/texture-factory'
 
 // ============ 房間座標常數 ============
 
@@ -134,6 +135,10 @@ interface BattleUnit {
   isDodgeInvincible: boolean              // 閃避無敵中
   tauntTargetId: string | null            // 被嘲諷後強制追打的目標 id（enemy 用）
   originalMoveSpeed: number               // push 減速前的原始速度（恢復用）
+  knockbackUntil: number                  // timestamp until which knockback velocity is preserved (0 = no knockback)
+  waypointPath: Array<{ x: number; y: number }>  // waypoints to follow (absolute coords)
+  currentWaypointIndex: number                     // index into waypointPath (-1 = done following waypoints)
+  targetCrystal: boolean    // true = this unit prioritizes attacking the crystal
 }
 
 // ============ 部署面板 UI 資料結構 ============
@@ -220,6 +225,41 @@ export class BattlePhase implements Phase {
   // 房間加成
   private roomBonuses: RoomBonuses = DEFAULT_ROOM_BONUSES
 
+  // 詞綴系統
+  private activeAffix: AffixDefinition | null = null
+
+  // 佈陣階段
+  private battleSubState: 'deploying' | 'fighting' = 'fighting'
+  private deployTrapUI: Phaser.GameObjects.Container | null = null
+  private selectedTrapDefId: string | null = null
+  private trapPreviewCircle: Phaser.GameObjects.Graphics | null = null
+  private startBattleButton: Phaser.GameObjects.Container | null = null
+  private breachArrow: Phaser.GameObjects.Container | null = null
+
+  // Level layout system
+  private currentLayout: LevelLayout | null = null
+  private activeLaunchPads: Array<{ x: number; y: number }> = []
+
+  // Obstacle system
+  private obstacleSprites: Array<{
+    sprite: Phaser.GameObjects.TileSprite
+    data: ObstacleData
+    hp: number
+    maxHp: number
+    hpBar: Phaser.GameObjects.Graphics | null
+    body: Phaser.Physics.Arcade.StaticBody | null
+  }> = []
+  private obstacleGroup: Phaser.Physics.Arcade.StaticGroup | null = null
+
+  // Crystal (dungeon core)
+  private crystalSprite: Phaser.GameObjects.Container | null = null
+  private crystalHP: number = 250
+  private crystalMaxHP: number = 250
+  private crystalX: number = 0
+  private crystalY: number = 0
+  private crystalAlive: boolean = true
+  private crystalHPBar: Phaser.GameObjects.Graphics | null = null
+
   // 戰鬥結束
   private battleEnded: boolean = false
 
@@ -289,6 +329,32 @@ export class BattlePhase implements Phase {
     this.breachDirection = (this.scene.data.get('breachDirection') as string) ?? 'up'
     this.roomDistance = (this.scene.data.get('roomDistance') as number) ?? 1
 
+    // Load level layout
+    const runState0 = gameStore.getState().run
+    const layoutId = runState0.currentLayoutId
+    if (layoutId) {
+      this.currentLayout = getLayoutById(layoutId) ?? null
+    }
+    if (!this.currentLayout) {
+      this.currentLayout = selectLayoutForDistance(this.roomDistance)
+    }
+
+    // Validate breach direction against layout
+    if (this.currentLayout && !this.currentLayout.allowedBreachDirections.includes(this.breachDirection)) {
+      this.breachDirection = this.currentLayout.allowedBreachDirections[0] ?? 'up'
+    }
+
+    // Set launch pad positions from layout
+    if (this.currentLayout && this.currentLayout.launchPads.length > 0) {
+      this.activeLaunchPads = this.currentLayout.launchPads.map(lp => ({
+        x: ROOM_X + lp.x,
+        y: ROOM_Y + lp.y,
+      }))
+    } else {
+      this.activeLaunchPads = [...LAUNCH_PADS]
+    }
+    this.activeLaunchPadIndex = 0
+
     // 查詢波次配置
     this.waveConfig = DataRegistry.getWaveConfig(this.roomDistance) ?? null
     if (!this.waveConfig) {
@@ -319,6 +385,8 @@ export class BattlePhase implements Phase {
       this.drawBattleRoom()
     }
     this.createLaunchPads()
+    this.renderObstacles()
+    this.renderCrystal()
     this.createDeployPanel()
     this.setupInputHandlers()
 
@@ -328,12 +396,86 @@ export class BattlePhase implements Phase {
     // 計算房間加成
     this.roomBonuses = this.calculateRoomBonuses()
 
-    // 播放破牆動畫 (0.5s) 然後開始第一波
-    this.playBreachAnimation(() => {
-      // 生成小雞（房間加成）
-      this.spawnChickens()
-      this.startNextWave()
-    })
+    // 載入房間詞綴
+    const runState = gameStore.getState().run
+    if (runState.currentAffix) {
+      this.activeAffix = DataRegistry.getAffixById(runState.currentAffix) ?? null
+    }
+
+    // 詞綴：寶物守衛 → 多 1 波敵人（複製最後一波）
+    if (this.activeAffix?.modifier.extraWaves && this.activeWaves.length > 0) {
+      const lastWave = this.activeWaves[this.activeWaves.length - 1]
+      const extraWave = {
+        waveNumber: lastWave.waveNumber + 1,
+        entries: lastWave.entries,
+      }
+      this.activeWaves = [...this.activeWaves, extraWave]
+    }
+
+    // 多場守衛：每次繼續守衛額外增加 1 波
+    const extraDefendWaves = (this.scene.data.get('extraDefendWaves') as number) ?? 0
+    if (extraDefendWaves > 0 && this.activeWaves.length > 0) {
+      const lastWave = this.activeWaves[this.activeWaves.length - 1]
+      const extraWavesArray: Array<{ waveNumber: number; entries: typeof lastWave.entries }> = []
+      for (let i = 0; i < extraDefendWaves; i++) {
+        extraWavesArray.push({
+          waveNumber: lastWave.waveNumber + 1 + i,
+          entries: lastWave.entries,
+        })
+      }
+      this.activeWaves = [...this.activeWaves, ...extraWavesArray]
+    }
+
+    // Restore placed traps from RunState (for multi-battle defending)
+    const placedTraps = gameStore.getState().run.placedTraps
+    if (placedTraps.length > 0) {
+      for (const pt of placedTraps) {
+        const trapDef = DataRegistry.getTrapById(pt.definitionId)
+        if (trapDef && this.trapSystem) {
+          const trap = this.trapSystem.placeTrapWithId(pt.trapId, pt.x, pt.y, trapDef)
+          if (trap) {
+            this.createTrapVisual(trap.id, trap.x, trap.y, trap.triggerRadius, pt.definitionId)
+          }
+        }
+      }
+    }
+
+    // 詞綴：陷阱密布 → 免費放置尖刺陷阱
+    if (this.activeAffix?.modifier.freeTraps) {
+      const spikeDef = DataRegistry.getTrapById('spike_trap')
+      if (spikeDef && this.trapSystem) {
+        for (let i = 0; i < this.activeAffix.modifier.freeTraps; i++) {
+          const tx = ROOM_X + 40 + Math.random() * (ROOM_WIDTH - 80)
+          const ty = ROOM_Y + 40 + Math.random() * (ROOM_HEIGHT - 80)
+          const trap = this.trapSystem.placeTrap(tx, ty, spikeDef)
+          if (trap) {
+            this.createTrapVisual(trap.id, trap.x, trap.y, trap.triggerRadius, 'spike_trap')
+          }
+        }
+      }
+    }
+
+    // 進入佈陣階段（若有陷阱庫存）
+    const hasTrapInventory = Object.values(gameStore.getState().run.trapInventory).some(count => count > 0)
+    if (hasTrapInventory) {
+      this.battleSubState = 'deploying'
+      this.showDeploymentUI()
+      // 佈陣期間也顯示詞綴資訊，讓玩家知道當前房間效果
+      if (this.activeAffix) {
+        this.showAffixBanner(this.activeAffix.name, this.activeAffix.description)
+      }
+    } else {
+      // 沒有陷阱 → 直接開戰
+      this.battleSubState = 'fighting'
+      this.playBreachAnimation(() => {
+        this.spawnChickens()
+        this.startNextWave()
+      })
+      // 顯示詞綴橫幅
+      if (this.activeAffix) {
+        this.showAffixBanner(this.activeAffix.name, this.activeAffix.description)
+      }
+    }
 
     // 更新 GameStore 戰鬥狀態
     gameStore.dispatchRunState(run => ({
@@ -351,6 +493,9 @@ export class BattlePhase implements Phase {
 
   update(time: number, delta: number): void {
     if (this.battleEnded) return
+
+    // 佈陣階段：不執行戰鬥邏輯
+    if (this.battleSubState === 'deploying') return
 
     // 1. 處理波次轉場
     this.updateWaveTransition(delta)
@@ -376,6 +521,27 @@ export class BattlePhase implements Phase {
 
     // 5. 檢查陷阱
     this.updateTraps()
+
+    // 5.1 套用持續性場地效果（沼澤減速、圖騰弱化）
+    this.applyFieldEffects()
+
+    // 5.2 Crystal attack check
+    if (this.crystalAlive) {
+      this.updateCrystalAttacks(time)
+    }
+
+    // 5.3 Priest healing
+    this.updatePriestHealing(time)
+
+    // 5.5 詞綴：聖域 HP 回復
+    if (this.activeAffix?.modifier.allyHpRegen) {
+      const regenRate = this.activeAffix.modifier.allyHpRegen
+      for (const unit of this.units) {
+        if (unit.faction === 'ally' && unit.alive && unit.hp < unit.maxHP) {
+          unit.hp = Math.min(unit.maxHP, unit.hp + unit.maxHP * regenRate * (delta / 1000))
+        }
+      }
+    }
 
     // 6. 更新部署面板 CD
     this.updateDeployPanel(time)
@@ -441,6 +607,32 @@ export class BattlePhase implements Phase {
     // 原地開戰
     this.battleOverlayElements = []
     this.usingSharedRoom = false
+
+    // 詞綴系統
+    this.activeAffix = null
+
+    // 佈陣階段
+    this.battleSubState = 'fighting'
+    this.deployTrapUI = null
+    this.selectedTrapDefId = null
+    this.trapPreviewCircle = null
+    this.startBattleButton = null
+    this.breachArrow = null
+
+    // Layout 系統
+    this.currentLayout = null
+    this.activeLaunchPads = []
+    this.obstacleSprites = []
+    this.obstacleGroup = null
+
+    // 水晶系統
+    this.crystalSprite = null
+    this.crystalHP = 250
+    this.crystalMaxHP = 250
+    this.crystalX = 0
+    this.crystalY = 0
+    this.crystalAlive = true
+    this.crystalHPBar = null
   }
 
   private setupPhysicsGroups(): void {
@@ -839,6 +1031,11 @@ export class BattlePhase implements Phase {
     const aliveEnemies = this.units.filter(u => u.faction === 'enemy' && u.alive)
     if (aliveEnemies.length >= MAX_ENEMIES) return
 
+    // 詞綴：窄道 → 敵人同時只能進 2 個
+    if (this.activeAffix?.modifier.maxSimultaneousEnemies !== undefined) {
+      if (aliveEnemies.length >= this.activeAffix.modifier.maxSimultaneousEnemies) return
+    }
+
     this.heroSpawnTimer += delta
     if (this.heroSpawnTimer < ENEMY_SPAWN_INTERVAL) return
 
@@ -874,6 +1071,22 @@ export class BattlePhase implements Phase {
     const unit = this.createUnit(heroDef, 'enemy', breach.x, breach.y)
     this.units = [...this.units, unit]
 
+    // Assign waypoints from layout
+    if (this.currentLayout) {
+      const wpPath = this.currentLayout.waypoints[this.breachDirection]
+      if (wpPath && wpPath.points.length > 0) {
+        unit.waypointPath = wpPath.points.map(p => ({ x: ROOM_X + p.x, y: ROOM_Y + p.y }))
+        unit.currentWaypointIndex = 0
+      }
+    }
+
+    // Thief always targets crystal; other heroes 30% chance
+    if (heroDef.id === 'thief') {
+      unit.targetCrystal = true
+    } else if (this.crystalAlive && Math.random() < 0.3) {
+      unit.targetCrystal = true
+    }
+
     // 部署動畫（scale 0 → 2）
     unit.sprite.setScale(0)
     this.scene.tweens.add({
@@ -899,7 +1112,7 @@ export class BattlePhase implements Phase {
     const aliveAllies = this.units.filter(u => u.faction === 'ally' && u.alive)
     if (aliveAllies.length >= this.getEffectiveAllyLimit()) return
 
-    const activePad = LAUNCH_PADS[this.activeLaunchPadIndex]
+    const activePad = this.activeLaunchPads[this.activeLaunchPadIndex]
 
     // 在發射台位置建立單位（連射時使用指定的進化資料）
     const unit = (evolutionOverride !== undefined)
@@ -1088,9 +1301,15 @@ export class BattlePhase implements Phase {
 
     this.enemyGroup?.add(sprite)
 
+    // 詞綴：狂熱 → 調整敵人 HP 與攻速
+    const enemyHpMult = this.activeAffix?.modifier.allHpMultiplier ?? 1
+    const enemyAtkSpeedMult = this.activeAffix?.modifier.allAttackSpeedMultiplier ?? 1
+    const enemyHp = Math.round(heroDef.stats.hp * enemyHpMult)
+    const enemyAttackInterval = heroDef.stats.attackInterval / enemyAtkSpeedMult
+
     // HP 條
     const hpBar = this.scene.add.graphics()
-    this.drawHPBar(hpBar, x, y - sprite.displayHeight / 2 - 6, heroDef.stats.hp, heroDef.stats.hp)
+    this.drawHPBar(hpBar, x, y - sprite.displayHeight / 2 - 6, enemyHp, enemyHp)
 
     return {
       sprite,
@@ -1100,11 +1319,11 @@ export class BattlePhase implements Phase {
       faction,
       id: unitId,
       definitionId: heroDef.id,
-      hp: heroDef.stats.hp,
-      maxHP: heroDef.stats.hp,
+      hp: enemyHp,
+      maxHP: enemyHp,
       atk: heroDef.stats.attack,
       baseATK: heroDef.stats.attack,
-      attackInterval: heroDef.stats.attackInterval,
+      attackInterval: enemyAttackInterval,
       moveSpeed: heroDef.stats.moveSpeed,
       attackRange: heroDef.stats.attackRange,
       aiType: heroDef.aiType,
@@ -1123,6 +1342,10 @@ export class BattlePhase implements Phase {
       isDodgeInvincible: false,
       tauntTargetId: null,
       originalMoveSpeed: 0,
+      knockbackUntil: 0,
+      waypointPath: [],
+      currentWaypointIndex: -1,
+      targetCrystal: false,
     }
   }
 
@@ -1160,12 +1383,20 @@ export class BattlePhase implements Phase {
     this.allyGroup?.add(sprite)
 
     // Use evolved stats if available, fallback to base
-    const hp = evo?.evolvedStats.hp ?? monsterDef.stats.hp
-    const atk = evo?.evolvedStats.attack ?? monsterDef.stats.attack
-    const attackInterval = (evo?.evolvedStats.attackInterval ?? monsterDef.stats.attackInterval) * this.roomBonuses.attackSpeedMultiplier
+    const baseHp = evo?.evolvedStats.hp ?? monsterDef.stats.hp
+    const baseAtk = evo?.evolvedStats.attack ?? monsterDef.stats.attack
+    const baseAttackInterval = (evo?.evolvedStats.attackInterval ?? monsterDef.stats.attackInterval) * this.roomBonuses.attackSpeedMultiplier
     const moveSpeed = evo?.evolvedStats.moveSpeed ?? monsterDef.stats.moveSpeed
     const attackRange = evo?.evolvedStats.attackRange ?? monsterDef.stats.attackRange
     const aiType = evo?.aiType ?? monsterDef.aiType
+
+    // 詞綴：狂熱 → 調整我方 HP 與攻速；暗室 → 我方攻擊 +20%
+    const allyHpMult = this.activeAffix?.modifier.allHpMultiplier ?? 1
+    const allyAtkSpeedMult = this.activeAffix?.modifier.allAttackSpeedMultiplier ?? 1
+    const allyAtkMult = this.activeAffix?.modifier.allyAttackMultiplier ?? 1
+    const hp = Math.round(baseHp * allyHpMult)
+    const atk = Math.round(baseAtk * allyAtkMult)
+    const attackInterval = baseAttackInterval / allyAtkSpeedMult
 
     const hpBar = this.scene.add.graphics()
     this.drawHPBar(hpBar, x, y - sprite.displayHeight / 2 - 6, hp, hp, evo)
@@ -1203,6 +1434,10 @@ export class BattlePhase implements Phase {
       isDodgeInvincible: false,
       tauntTargetId: null,
       originalMoveSpeed: 0,
+      knockbackUntil: 0,
+      waypointPath: [],
+      currentWaypointIndex: -1,
+      targetCrystal: false,
     }
   }
 
@@ -1237,12 +1472,20 @@ export class BattlePhase implements Phase {
 
     this.allyGroup?.add(sprite)
 
-    const hp = evo?.evolvedStats.hp ?? monsterDef.stats.hp
-    const atk = evo?.evolvedStats.attack ?? monsterDef.stats.attack
-    const attackInterval = (evo?.evolvedStats.attackInterval ?? monsterDef.stats.attackInterval) * this.roomBonuses.attackSpeedMultiplier
+    const baseHpWE = evo?.evolvedStats.hp ?? monsterDef.stats.hp
+    const baseAtkWE = evo?.evolvedStats.attack ?? monsterDef.stats.attack
+    const baseAttackIntervalWE = (evo?.evolvedStats.attackInterval ?? monsterDef.stats.attackInterval) * this.roomBonuses.attackSpeedMultiplier
     const moveSpeed = evo?.evolvedStats.moveSpeed ?? monsterDef.stats.moveSpeed
     const attackRange = evo?.evolvedStats.attackRange ?? monsterDef.stats.attackRange
     const aiType = evo?.aiType ?? monsterDef.aiType
+
+    // 詞綴：狂熱 → 調整我方 HP 與攻速；暗室 → 我方攻擊 +20%
+    const allyHpMultWE = this.activeAffix?.modifier.allHpMultiplier ?? 1
+    const allyAtkSpeedMultWE = this.activeAffix?.modifier.allAttackSpeedMultiplier ?? 1
+    const allyAtkMultWE = this.activeAffix?.modifier.allyAttackMultiplier ?? 1
+    const hp = Math.round(baseHpWE * allyHpMultWE)
+    const atk = Math.round(baseAtkWE * allyAtkMultWE)
+    const attackInterval = baseAttackIntervalWE / allyAtkSpeedMultWE
 
     const hpBar = this.scene.add.graphics()
     this.drawHPBar(hpBar, x, y - sprite.displayHeight / 2 - 6, hp, hp, evo)
@@ -1280,6 +1523,10 @@ export class BattlePhase implements Phase {
       isDodgeInvincible: false,
       tauntTargetId: null,
       originalMoveSpeed: 0,
+      knockbackUntil: 0,
+      waypointPath: [],
+      currentWaypointIndex: -1,
+      targetCrystal: false,
     }
   }
 
@@ -1381,7 +1628,7 @@ export class BattlePhase implements Phase {
       this.applyMovement(unit, aiResult)
 
       // Bug fix: 敵人無目標時向房間中心推進（避免卡在破口不動）
-      if (unit.faction === 'enemy' && unit.ai.state === AIState.IDLE && enemies.length === 0) {
+      if (unit.faction === 'enemy' && unit.ai.state === AIState.IDLE && enemies.length === 0 && !(unit.knockbackUntil > 0 && Date.now() < unit.knockbackUntil)) {
         const centerX = ROOM_X + ROOM_WIDTH / 2
         const centerY = ROOM_Y + ROOM_HEIGHT * 0.5
         const body = unit.sprite.body as Phaser.Physics.Arcade.Body
@@ -1397,7 +1644,7 @@ export class BattlePhase implements Phase {
       }
 
       // 攻擊
-      if (aiResult.shouldAttack && unit.ai.targetIndex !== null) {
+      if (aiResult.shouldAttack && unit.ai.targetIndex !== null && !(unit.knockbackUntil > 0 && Date.now() < unit.knockbackUntil)) {
         const targetList = unit.faction === 'ally' ? aliveEnemies : aliveAllies
         const target = targetList[unit.ai.targetIndex]
         if (target) {
@@ -1425,6 +1672,15 @@ export class BattlePhase implements Phase {
   private applyMovement(unit: BattleUnit, aiResult: UpdateAIResult): void {
     const body = unit.sprite.body as Phaser.Physics.Arcade.Body
 
+    // Skip AI movement override during knockback
+    if (unit.knockbackUntil > 0 && Date.now() < unit.knockbackUntil) {
+      return
+    }
+    // Clear expired knockback
+    if (unit.knockbackUntil > 0) {
+      unit.knockbackUntil = 0
+    }
+
     if (unit.ai.state === AIState.SPAWNING) {
       body.setVelocity(0, 0)
       return
@@ -1434,6 +1690,49 @@ export class BattlePhase implements Phase {
     if (unit.aiType === 'ranged_stationary') {
       body.setVelocity(0, 0)
       return
+    }
+
+    // Waypoint navigation: follow path before engaging in normal AI combat
+    if (unit.waypointPath.length > 0 && unit.currentWaypointIndex >= 0 && unit.currentWaypointIndex < unit.waypointPath.length) {
+      const wp = unit.waypointPath[unit.currentWaypointIndex]
+      const dx = wp.x - unit.sprite.x
+      const dy = wp.y - unit.sprite.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+
+      if (dist < 12) {
+        // Reached waypoint, advance to next
+        unit.currentWaypointIndex += 1
+        if (unit.currentWaypointIndex >= unit.waypointPath.length) {
+          unit.currentWaypointIndex = -1  // Done with waypoints, switch to normal AI
+        }
+      } else {
+        body.setVelocity(
+          (dx / dist) * unit.moveSpeed,
+          (dy / dist) * unit.moveSpeed
+        )
+        return  // Skip normal AI movement this frame
+      }
+    }
+
+    // Crystal targeting: override AI movement to head for crystal
+    if (unit.targetCrystal && this.crystalAlive && unit.faction === 'enemy') {
+      // Only override if done with waypoints
+      if (unit.currentWaypointIndex < 0 || unit.waypointPath.length === 0) {
+        const dx = this.crystalX - unit.sprite.x
+        const dy = this.crystalY - unit.sprite.y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+
+        if (dist > unit.attackRange) {
+          body.setVelocity(
+            (dx / dist) * unit.moveSpeed,
+            (dy / dist) * unit.moveSpeed
+          )
+          return  // Skip normal AI movement
+        } else {
+          body.setVelocity(0, 0)  // Stop at crystal
+          return
+        }
+      }
     }
 
     if (aiResult.moveToX !== null && aiResult.moveToY !== null) {
@@ -1455,7 +1754,11 @@ export class BattlePhase implements Phase {
 
   private performAttack(attacker: BattleUnit, target: BattleUnit, targetList: BattleUnit[]): void {
     const effectiveATK = this.getEffectiveATK(attacker)
-    const damage = calculateDamage(effectiveATK)
+    // Apply totem field damage multiplier only when an ally attacks an enemy
+    const damageMultiplier = (attacker.faction === 'ally' && target.faction === 'enemy')
+      ? ((target as any)._fieldDamageMultiplier ?? 1.0)
+      : 1.0
+    const damage = calculateDamage(effectiveATK, damageMultiplier)
     this.applyDamage(target, damage)
 
     // 遠程投射物視覺效果
@@ -1570,8 +1873,9 @@ export class BattlePhase implements Phase {
     body.enable = false
 
     if (unit.faction === 'enemy') {
-      // 擊殺獎勵
-      const goldReward = Math.floor(unit.goldReward * this.roomBonuses.goldMultiplier)
+      // 擊殺獎勵（含詞綴：寶物守衛金幣倍率）
+      const affixGoldMult = this.activeAffix?.modifier.goldMultiplier ?? 1
+      const goldReward = Math.floor(unit.goldReward * this.roomBonuses.goldMultiplier * affixGoldMult)
       if (goldReward > 0) {
         this.goldEarned += goldReward
         this.scene.data.set('goldEarned', this.goldEarned)
@@ -1670,43 +1974,213 @@ export class BattlePhase implements Phase {
       triggeredTrap: e.triggeredTrap,
     }))
 
-    const results = this.trapSystem.checkTriggers(enemyData)
+    const results = this.trapSystem.checkOneTimeTriggers(enemyData)
 
     for (const result of results) {
-      const enemy = aliveEnemies[result.enemyIndex]
-      if (enemy) {
-        enemy.triggeredTrap = true
-        const trapDamage = calculateTrapDamage(enemy.maxHP, DATA_CONSTANTS.TRAP_DAMAGE_PERCENT)
-        this.applyDamage(enemy, trapDamage)
-        this.flashWhite(enemy.sprite)
-        // 陷阱橘紅著色 200ms
-        enemy.sprite.setTint(0xff8844)
-        this.scene.time.delayedCall(200, () => {
-          if (enemy.sprite.active) enemy.sprite.clearTint()
-        })
-        // 陷阱觸發尖刺粒子
-        for (let tp = 0; tp < 4; tp++) {
-          const spikeAngle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2
-          const spikeDist = 10 + Math.random() * 12
-          const spike = this.scene.add.circle(
-            enemy.sprite.x, enemy.sprite.y + 8,
-            1, 0xcc6644, 0.9,
-          )
-          this.scene.tweens.add({
-            targets: spike,
-            x: enemy.sprite.x + Math.cos(spikeAngle) * spikeDist,
-            y: enemy.sprite.y + 8 + Math.sin(spikeAngle) * spikeDist,
-            alpha: 0,
-            duration: 200,
-            onComplete: () => spike.destroy(),
-          })
+      if (result.type === 'spike') {
+        const enemy = aliveEnemies[result.enemyIndex]
+        if (!enemy || enemy.definitionId === 'thief') {
+          // Thief immune to one-time traps - trap consumed but no effect
+          this.destroyTrapVisual(result.trapId)
+          continue
         }
+        if (enemy) {
+          enemy.triggeredTrap = true
+          const trapDamage = result.damage
+          this.applyDamage(enemy, trapDamage)
+          this.flashWhite(enemy.sprite)
+          // 陷阱橘紅著色 200ms
+          enemy.sprite.setTint(0xff8844)
+          this.scene.time.delayedCall(200, () => {
+            if (enemy.sprite.active) enemy.sprite.clearTint()
+          })
+          // 陷阱觸發尖刺粒子
+          for (let tp = 0; tp < 4; tp++) {
+            const spikeAngle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2
+            const spikeDist = 10 + Math.random() * 12
+            const spike = this.scene.add.circle(
+              enemy.sprite.x, enemy.sprite.y + 8,
+              1, 0xcc6644, 0.9,
+            )
+            this.scene.tweens.add({
+              targets: spike,
+              x: enemy.sprite.x + Math.cos(spikeAngle) * spikeDist,
+              y: enemy.sprite.y + 8 + Math.sin(spikeAngle) * spikeDist,
+              alpha: 0,
+              duration: 200,
+              onComplete: () => spike.destroy(),
+            })
+          }
+          this.destroyTrapVisual(result.trapId)
+          eventBus.emit({ type: 'TRAP_TRIGGERED', trapId: result.trapId, damage: trapDamage })
+        }
+      } else if (result.type === 'bouncer') {
+        // === 彈跳板：擊退敵人 ===
+        const enemy = aliveEnemies[result.enemyIndex]
+        if (!enemy || enemy.definitionId === 'thief') {
+          // Thief immune to one-time traps - trap consumed but no effect
+          this.destroyTrapVisual(result.trapId)
+          continue
+        }
+        if (enemy && enemy.sprite.active) {
+          enemy.triggeredTrap = true
+          // Apply knockback force using physics
+          const body = enemy.sprite.body as Phaser.Physics.Arcade.Body
+          if (body) {
+            body.setVelocity(result.forceX, result.forceY)
+            enemy.knockbackUntil = Date.now() + 400  // 400ms knockback duration
+          }
+          // Visual feedback: yellow flash
+          enemy.sprite.setTint(0xddcc22)
+          this.scene.time.delayedCall(300, () => {
+            if (enemy.sprite.active) enemy.sprite.clearTint()
+          })
+          // Bounce particles
+          for (let bp = 0; bp < 3; bp++) {
+            const angle = Math.random() * Math.PI * 2
+            const dist = 8 + Math.random() * 10
+            const particle = this.scene.add.circle(
+              enemy.sprite.x, enemy.sprite.y, 2, 0xddcc22, 0.8
+            )
+            this.scene.tweens.add({
+              targets: particle,
+              x: enemy.sprite.x + Math.cos(angle) * dist,
+              y: enemy.sprite.y + Math.sin(angle) * dist,
+              alpha: 0,
+              duration: 250,
+              onComplete: () => particle.destroy(),
+            })
+          }
+          this.destroyTrapVisual(result.trapId)
+          eventBus.emit({ type: 'TRAP_TRIGGERED', trapId: result.trapId, damage: 0 })
+        }
+      } else if (result.type === 'alarm') {
+        // === 警報鈴：附近我方攻速提升 ===
+        // Check if triggering enemy is a thief (immune to one-time traps)
+        const alarmTriggerEnemy = aliveEnemies.find(e => {
+          const dx = e.sprite.x - result.x
+          const dy = e.sprite.y - result.y
+          return Math.sqrt(dx * dx + dy * dy) <= 30  // within trigger radius approximation
+        })
+        if (alarmTriggerEnemy && alarmTriggerEnemy.definitionId === 'thief') {
+          // Thief immune to one-time traps - trap consumed but no effect
+          this.destroyTrapVisual(result.trapId)
+          continue
+        }
+        const alarmX = result.x
+        const alarmY = result.y
+        const buffRadius = result.buffRadius
+        const buffRadiusSq = buffRadius * buffRadius
+        const speedMultiplier = result.attackSpeedMultiplier
+        const buffDuration = result.duration
+
+        // Find allies within buff radius
+        for (const unit of this.units) {
+          if (unit.faction !== 'ally' || !unit.alive) continue
+          const dx = unit.sprite.x - alarmX
+          const dy = unit.sprite.y - alarmY
+          if (dx * dx + dy * dy <= buffRadiusSq) {
+            // Buff: reduce attack interval temporarily
+            const originalInterval = unit.attackInterval
+            unit.attackInterval = originalInterval / speedMultiplier
+            // Revert after duration
+            this.scene.time.delayedCall(buffDuration, () => {
+              if (unit.alive) {
+                unit.attackInterval = originalInterval
+              }
+            })
+            // Visual: brief green glow
+            unit.sprite.setTint(0x55dd88)
+            this.scene.time.delayedCall(500, () => {
+              if (unit.sprite.active) unit.sprite.clearTint()
+            })
+          }
+        }
+
+        // Alarm bell visual effect: expanding ring
+        const ring = this.scene.add.circle(alarmX, alarmY, 10, 0xdd7722, 0)
+        ring.setStrokeStyle(2, 0xdd7722, 0.8)
+        this.scene.tweens.add({
+          targets: ring,
+          radius: buffRadius,
+          strokeAlpha: 0,
+          duration: 500,
+          onComplete: () => ring.destroy(),
+        })
+
         this.destroyTrapVisual(result.trapId)
-        eventBus.emit({ type: 'TRAP_TRIGGERED', trapId: result.trapId, damage: trapDamage })
+        eventBus.emit({ type: 'TRAP_TRIGGERED', trapId: result.trapId, damage: 0 })
       }
     }
 
     this.trapSystem.removeTriggered()
+  }
+
+  private applyFieldEffects(): void {
+    if (!this.trapSystem) return
+
+    const aliveEnemies = this.units.filter(u => u.faction === 'enemy' && u.alive)
+    const enemyPositions = aliveEnemies.map(e => ({ x: e.sprite.x, y: e.sprite.y }))
+
+    const effects = this.trapSystem.getActiveFieldEffects(enemyPositions)
+
+    // Reset all enemy speeds to their original values first
+    for (const enemy of aliveEnemies) {
+      if (enemy.originalMoveSpeed > 0 && enemy.moveSpeed !== enemy.originalMoveSpeed) {
+        // Only restore if not being pushed (push has its own restoration)
+        enemy.moveSpeed = enemy.originalMoveSpeed
+      }
+    }
+
+    // Track which enemies have which effects this frame
+    const enemySlowFactors: Map<number, number> = new Map()
+    const enemyDamageMultipliers: Map<number, number> = new Map()
+
+    for (const effect of effects) {
+      if (effect.type === 'swamp') {
+        const current = enemySlowFactors.get(effect.enemyIndex) ?? 1
+        // Stack: take the strongest slow (lowest factor)
+        enemySlowFactors.set(effect.enemyIndex, Math.min(current, 1 - effect.slowPercent))
+      } else if (effect.type === 'totem') {
+        const current = enemyDamageMultipliers.get(effect.enemyIndex) ?? 1
+        // Stack: take the highest multiplier
+        enemyDamageMultipliers.set(effect.enemyIndex, Math.max(current, effect.damageMultiplier))
+      }
+    }
+
+    // Apply slow effects
+    for (const [enemyIdx, factor] of enemySlowFactors) {
+      const enemy = aliveEnemies[enemyIdx]
+      if (enemy) {
+        enemy.moveSpeed = enemy.originalMoveSpeed * factor
+        // Visual: green tint while slowed
+        if (enemy.sprite.active && !enemy.sprite.tintTopLeft) {
+          enemy.sprite.setTint(0x33aa55)
+        }
+      }
+    }
+
+    // Clear tint for enemies NOT in any swamp
+    for (let i = 0; i < aliveEnemies.length; i++) {
+      if (!enemySlowFactors.has(i)) {
+        const enemy = aliveEnemies[i]
+        if (enemy.sprite.active && enemy.sprite.tintTopLeft === 0x33aa55) {
+          enemy.sprite.clearTint()
+        }
+      }
+    }
+
+    // Store damage multipliers for use in combat (on the BattleUnit)
+    // We need a way to pass this to calculateDamage. Add a temporary field.
+    for (const enemy of aliveEnemies) {
+      (enemy as any)._fieldDamageMultiplier = 1.0
+    }
+    for (const [enemyIdx, multiplier] of enemyDamageMultipliers) {
+      const enemy = aliveEnemies[enemyIdx]
+      if (enemy) {
+        (enemy as any)._fieldDamageMultiplier = multiplier
+      }
+    }
   }
 
   // ============ 視覺效果 ============
@@ -2277,24 +2751,35 @@ export class BattlePhase implements Phase {
     spawnHitParticles(this.scene, sprite.x, sprite.y)
   }
 
-  private createTrapVisual(trapId: string, x: number, y: number, radius: number): void {
+  private createTrapVisual(trapId: string, x: number, y: number, radius: number, definitionId?: string): void {
     const container = this.scene.add.container(x, y)
     container.setDepth(5)
 
-    // 觸發範圍圈（半透明紅色，增強可見度）
-    const rangeCircle = this.scene.add.circle(0, 0, radius, 0xff4444, 0.2)
-    rangeCircle.setStrokeStyle(1.5, 0xff6644, 0.5)
+    // 根據陷阱類型選擇顏色
+    const trapColors: Record<string, { fill: number; stroke: number }> = {
+      spike_trap:    { fill: 0xff4444, stroke: 0xff6644 },
+      slow_swamp:    { fill: 0x33aa55, stroke: 0x55cc77 },
+      bouncer:       { fill: 0xddcc22, stroke: 0xeeee44 },
+      weaken_totem:  { fill: 0x9933cc, stroke: 0xbb55ee },
+      alarm_bell:    { fill: 0xdd7722, stroke: 0xffaa44 },
+    }
+    const colors = trapColors[definitionId ?? ''] ?? trapColors['spike_trap']
+
+    // 觸發範圍圈（使用陷阱類型對應的顏色）
+    const rangeCircle = this.scene.add.circle(0, 0, radius, colors.fill, 0.15)
+    rangeCircle.setStrokeStyle(1.5, colors.stroke, 0.5)
     container.add(rangeCircle)
 
-    // 使用像素圖示取代手繪 cross
-    const icon = this.scene.add.sprite(0, 0, TEXTURE_KEYS.ICON_TRAP)
+    // 使用對應的像素圖示
+    const textureKey = TRAP_TEXTURE_MAP[definitionId ?? ''] ?? TEXTURE_KEYS.ICON_TRAP
+    const icon = this.scene.add.sprite(0, 0, textureKey)
     icon.setScale(2)
     container.add(icon)
 
     // 脈衝動畫
     this.scene.tweens.add({
       targets: rangeCircle,
-      alpha: { from: 0.2, to: 0.35 },
+      alpha: { from: 0.15, to: 0.3 },
       duration: 800,
       yoyo: true,
       repeat: -1,
@@ -2542,8 +3027,8 @@ export class BattlePhase implements Phase {
   // ============ 發射台 ============
 
   private createLaunchPads(): void {
-    for (let i = 0; i < LAUNCH_PADS.length; i++) {
-      const pad = LAUNCH_PADS[i]
+    for (let i = 0; i < this.activeLaunchPads.length; i++) {
+      const pad = this.activeLaunchPads[i]
       const g = this.scene.add.graphics()
       this.launchPadGraphicsList.push(g)
 
@@ -2620,6 +3105,349 @@ export class BattlePhase implements Phase {
         yoyo: true,
         repeat: -1,
       })
+    }
+  }
+
+  // ============ 障礙物系統 ============
+
+  private renderObstacles(): void {
+    if (!this.currentLayout || this.currentLayout.obstacles.length === 0) return
+
+    this.obstacleGroup = this.scene.physics.add.staticGroup()
+
+    for (const obs of this.currentLayout.obstacles) {
+      const absX = ROOM_X + obs.x
+      const absY = ROOM_Y + obs.y
+
+      const textureKey = obs.type === 'wall' ? TEXTURE_KEYS.OBSTACLE_WALL : TEXTURE_KEYS.OBSTACLE_CRATE
+
+      // Create tiled sprite to fill obstacle area
+      const tileSprite = this.scene.add.tileSprite(
+        absX, absY, obs.width, obs.height, textureKey
+      ).setOrigin(0, 0).setDepth(5)
+
+      // Add to static physics group
+      this.scene.physics.add.existing(tileSprite, true)
+      this.obstacleGroup.add(tileSprite)
+
+      // Set physics body size
+      const body = tileSprite.body as Phaser.Physics.Arcade.StaticBody
+      body.setSize(obs.width, obs.height)
+      body.setOffset(0, 0)
+
+      // HP bar for destructibles
+      let hpBar: Phaser.GameObjects.Graphics | null = null
+      const maxHp = obs.type === 'destructible' ? (obs.hp ?? 100) : Infinity
+      if (obs.type === 'destructible') {
+        hpBar = this.scene.add.graphics().setDepth(6)
+        this.drawObstacleHPBar(hpBar, absX + obs.width / 2, absY - 6, maxHp, maxHp)
+      }
+
+      this.obstacleSprites.push({
+        sprite: tileSprite,
+        data: obs,
+        hp: maxHp,
+        maxHp,
+        hpBar,
+        body,
+      })
+    }
+
+    // Obstacles block both ally and enemy groups
+    if (this.allyGroup) {
+      this.scene.physics.add.collider(this.allyGroup, this.obstacleGroup)
+    }
+    if (this.enemyGroup) {
+      this.scene.physics.add.collider(this.enemyGroup, this.obstacleGroup)
+    }
+  }
+
+  private drawObstacleHPBar(g: Phaser.GameObjects.Graphics, x: number, y: number, hp: number, maxHp: number): void {
+    g.clear()
+    const w = 30
+    const h = 3
+    g.fillStyle(0x333333, 0.8)
+    g.fillRect(x - w / 2, y, w, h)
+    const ratio = Math.max(0, hp / maxHp)
+    g.fillStyle(0xcc8844, 1)
+    g.fillRect(x - w / 2, y, w * ratio, h)
+  }
+
+  private destroyObstacle(obs: typeof this.obstacleSprites[0]): void {
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.random() * Math.PI * 2
+      const dist = 10 + Math.random() * 15
+      const cx = ROOM_X + obs.data.x + obs.data.width / 2
+      const cy = ROOM_Y + obs.data.y + obs.data.height / 2
+      const p = this.scene.add.circle(cx, cy, 2, 0x8b6914, 0.8).setDepth(10)
+      this.scene.tweens.add({
+        targets: p,
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        alpha: 0,
+        duration: 300,
+        onComplete: () => p.destroy(),
+      })
+    }
+    obs.sprite.destroy()
+    obs.hpBar?.destroy()
+    obs.hp = 0
+  }
+
+  // ============ 水晶（地城核心）============
+
+  private renderCrystal(): void {
+    if (!this.currentLayout?.crystalPosition) return
+
+    // Load crystal HP from RunState
+    const run = gameStore.getState().run
+    this.crystalHP = run.crystalHP
+    this.crystalMaxHP = run.crystalMaxHP
+    if (this.crystalHP <= 0) {
+      this.crystalAlive = false
+      return
+    }
+
+    this.crystalX = ROOM_X + this.currentLayout.crystalPosition.x
+    this.crystalY = ROOM_Y + this.currentLayout.crystalPosition.y
+
+    const container = this.scene.add.container(this.crystalX, this.crystalY).setDepth(4)
+
+    // Base glow
+    const glow = this.scene.add.circle(0, 0, 18, 0x4488ff, 0.15)
+    container.add(glow)
+
+    // Crystal diamond shape using graphics
+    const g = this.scene.add.graphics()
+    g.fillStyle(0x66aaff, 0.9)
+    g.fillTriangle(0, -12, -8, 0, 8, 0)    // top triangle
+    g.fillStyle(0x4488dd, 0.9)
+    g.fillTriangle(0, 12, -8, 0, 8, 0)     // bottom triangle
+    // Highlight
+    g.fillStyle(0xaaddff, 0.8)
+    g.fillTriangle(0, -10, -3, -2, 3, -2)  // inner shine
+    container.add(g)
+
+    // Label
+    const label = this.scene.add.text(0, -20, '水晶', {
+      fontSize: '8px',
+      fontFamily: 'monospace',
+      color: '#aaddff',
+    }).setOrigin(0.5)
+    container.add(label)
+
+    this.crystalSprite = container
+
+    // HP bar
+    this.crystalHPBar = this.scene.add.graphics().setDepth(5)
+    this.drawCrystalHPBar()
+
+    // Pulsing glow animation
+    this.scene.tweens.add({
+      targets: glow,
+      alpha: 0.3,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+  }
+
+  private drawCrystalHPBar(): void {
+    if (!this.crystalHPBar) return
+    this.crystalHPBar.clear()
+    const w = 36
+    const h = 4
+    const x = this.crystalX - w / 2
+    const y = this.crystalY + 16
+    // Background
+    this.crystalHPBar.fillStyle(0x222244, 0.9)
+    this.crystalHPBar.fillRect(x, y, w, h)
+    // HP fill
+    const ratio = Math.max(0, this.crystalHP / this.crystalMaxHP)
+    this.crystalHPBar.fillStyle(0x4488ff, 1)
+    this.crystalHPBar.fillRect(x, y, w * ratio, h)
+    // Border
+    this.crystalHPBar.lineStyle(1, 0x6688cc, 0.8)
+    this.crystalHPBar.strokeRect(x, y, w, h)
+  }
+
+  private updateCrystalAttacks(time: number): void {
+    const enemies = this.units.filter(u => u.faction === 'enemy' && u.alive && u.targetCrystal)
+
+    for (const enemy of enemies) {
+      // Check if enemy is in range of crystal
+      const dx = this.crystalX - enemy.sprite.x
+      const dy = this.crystalY - enemy.sprite.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+
+      if (dist <= enemy.attackRange + 15) {  // +15 for crystal visual radius
+        // Check attack cooldown
+        const intervalMs = enemy.attackInterval * 1000
+        if (time - enemy.ai.lastAttackTime >= intervalMs) {
+          // Attack crystal
+          enemy.ai = { ...enemy.ai, lastAttackTime: time }
+
+          const damage = enemy.atk
+          this.crystalHP -= damage
+          gameStore.dispatchRunState(run => damageCrystal(run, damage))
+
+          this.drawCrystalHPBar()
+
+          // Visual feedback: crystal flash
+          if (this.crystalSprite) {
+            this.scene.tweens.add({
+              targets: this.crystalSprite,
+              alpha: 0.4,
+              duration: 80,
+              yoyo: true,
+            })
+          }
+
+          // Damage number on crystal
+          this.showCrystalDamageNumber(this.crystalX, this.crystalY - 10, damage, 0xff4444)
+
+          // Crystal destroyed
+          if (this.crystalHP <= 0) {
+            this.crystalAlive = false
+            this.destroyCrystal()
+            break
+          }
+        }
+      }
+    }
+  }
+
+  private updatePriestHealing(time: number): void {
+    // Find all alive enemy priests
+    const priests = this.units.filter(u =>
+      u.faction === 'enemy' && u.alive && u.definitionId === 'priest'
+    )
+
+    for (const priest of priests) {
+      // Check heal cooldown (reuse attackInterval as heal interval)
+      const healIntervalMs = priest.attackInterval * 1000
+      if (time - priest.ai.lastAttackTime < healIntervalMs) continue
+
+      // Find lowest HP ally hero within 80px radius (not self)
+      const healRadius = 80
+      const healRadiusSq = healRadius * healRadius
+      let lowestTarget: BattleUnit | null = null
+      let lowestHP = Infinity
+
+      for (const unit of this.units) {
+        if (unit === priest) continue
+        if (unit.faction !== 'enemy' || !unit.alive) continue
+        if (unit.hp >= unit.maxHP) continue  // already full HP
+
+        const dx = unit.sprite.x - priest.sprite.x
+        const dy = unit.sprite.y - priest.sprite.y
+        const distSq = dx * dx + dy * dy
+
+        if (distSq <= healRadiusSq && unit.hp < lowestHP) {
+          lowestHP = unit.hp
+          lowestTarget = unit
+        }
+      }
+
+      if (lowestTarget) {
+        // Heal
+        priest.ai = { ...priest.ai, lastAttackTime: time }
+        const healAmount = 15
+        lowestTarget.hp = Math.min(lowestTarget.maxHP, lowestTarget.hp + healAmount)
+
+        // Update HP bar
+        this.drawHPBar(
+          lowestTarget.hpBar,
+          lowestTarget.sprite.x,
+          lowestTarget.sprite.y - lowestTarget.sprite.displayHeight / 2 - 6,
+          lowestTarget.hp,
+          lowestTarget.maxHP,
+          lowestTarget.evolution
+        )
+
+        // Heal visual: green number floating up
+        const hexColor = '#44dd88'
+        const txt = this.scene.add.text(
+          lowestTarget.sprite.x, lowestTarget.sprite.y - 10,
+          `+${healAmount}`,
+          { fontSize: '9px', fontFamily: 'monospace', color: hexColor, fontStyle: 'bold' }
+        ).setOrigin(0.5).setDepth(20)
+        this.scene.tweens.add({
+          targets: txt,
+          y: lowestTarget.sprite.y - 28,
+          alpha: 0,
+          duration: 600,
+          onComplete: () => txt.destroy(),
+        })
+
+        // Green line from priest to target
+        const healLine = this.scene.add.graphics().setDepth(15)
+        healLine.lineStyle(1, 0x44dd88, 0.6)
+        healLine.lineBetween(
+          priest.sprite.x, priest.sprite.y,
+          lowestTarget.sprite.x, lowestTarget.sprite.y
+        )
+        this.scene.tweens.add({
+          targets: healLine,
+          alpha: 0,
+          duration: 300,
+          onComplete: () => healLine.destroy(),
+        })
+      }
+    }
+  }
+
+  private showCrystalDamageNumber(x: number, y: number, damage: number, color: number): void {
+    const hexColor = '#' + color.toString(16).padStart(6, '0')
+    const txt = this.scene.add.text(x, y, `-${damage}`, {
+      fontSize: '10px',
+      fontFamily: 'monospace',
+      color: hexColor,
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(20)
+    this.scene.tweens.add({
+      targets: txt,
+      y: y - 20,
+      alpha: 0,
+      duration: 600,
+      onComplete: () => txt.destroy(),
+    })
+  }
+
+  private destroyCrystal(): void {
+    // Shatter effect
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.random() * Math.PI * 2
+      const dist = 15 + Math.random() * 20
+      const shard = this.scene.add.circle(
+        this.crystalX, this.crystalY, 2, 0x4488ff, 0.9
+      ).setDepth(15)
+      this.scene.tweens.add({
+        targets: shard,
+        x: this.crystalX + Math.cos(angle) * dist,
+        y: this.crystalY + Math.sin(angle) * dist,
+        alpha: 0,
+        scaleX: 0.3,
+        scaleY: 0.3,
+        duration: 500,
+        onComplete: () => shard.destroy(),
+      })
+    }
+
+    // Remove crystal visual
+    this.crystalSprite?.destroy()
+    this.crystalSprite = null
+    this.crystalHPBar?.destroy()
+    this.crystalHPBar = null
+
+    // All crystal-targeting enemies switch to normal combat
+    for (const unit of this.units) {
+      if (unit.targetCrystal) {
+        unit.targetCrystal = false
+      }
     }
   }
 
@@ -2846,7 +3674,7 @@ export class BattlePhase implements Phase {
     this.aimMonsterId = monsterId
     this.activeLaunchPadIndex = padIndex
 
-    const activePad = LAUNCH_PADS[padIndex]
+    const activePad = this.activeLaunchPads[padIndex]
     const monsterDef = DataRegistry.getMonsterById(monsterId)
     if (!monsterDef) return
 
@@ -3182,6 +4010,51 @@ export class BattlePhase implements Phase {
         }
       }
 
+      // Obstacle bounce for launching monsters
+      if (unit.isLaunching && this.obstacleSprites.length > 0) {
+        const launchBody = unit.sprite.body as Phaser.Physics.Arcade.Body
+        const ux = unit.sprite.x
+        const uy = unit.sprite.y
+        const ur = Math.max(unit.sprite.displayWidth, unit.sprite.displayHeight) / 3
+
+        for (const obs of this.obstacleSprites) {
+          if (obs.hp <= 0) continue
+          const ox = ROOM_X + obs.data.x
+          const oy = ROOM_Y + obs.data.y
+          const ow = obs.data.width
+          const oh = obs.data.height
+
+          // AABB vs circle collision
+          const closestX = Math.max(ox, Math.min(ux, ox + ow))
+          const closestY = Math.max(oy, Math.min(uy, oy + oh))
+          const ddx = ux - closestX
+          const ddy = uy - closestY
+          const distSq = ddx * ddx + ddy * ddy
+
+          if (distSq < ur * ur && distSq > 0) {
+            if (Math.abs(ddx) > Math.abs(ddy)) {
+              launchBody.velocity.x = -launchBody.velocity.x * LAUNCH_BOUNCE
+              unit.sprite.x += ddx > 0 ? 3 : -3
+            } else {
+              launchBody.velocity.y = -launchBody.velocity.y * LAUNCH_BOUNCE
+              unit.sprite.y += ddy > 0 ? 3 : -3
+            }
+
+            // Damage destructible obstacles
+            if (obs.data.type === 'destructible') {
+              obs.hp -= 20
+              if (obs.hpBar) {
+                this.drawObstacleHPBar(obs.hpBar, ROOM_X + obs.data.x + obs.data.width / 2, ROOM_Y + obs.data.y - 6, obs.hp, obs.maxHp)
+              }
+              if (obs.hp <= 0) {
+                this.destroyObstacle(obs)
+              }
+            }
+            break
+          }
+        }
+      }
+
       // 每幀施加摩擦力
       body.velocity.x *= LAUNCH_FRICTION
       body.velocity.y *= LAUNCH_FRICTION
@@ -3249,8 +4122,8 @@ export class BattlePhase implements Phase {
       if (this.pickerMode) {
         // 點擊任一發射台附近 → 關閉 picker，進入針對該台的瞄準模式
         let clickedPadIndex = -1
-        for (let i = 0; i < LAUNCH_PADS.length; i++) {
-          const pad = LAUNCH_PADS[i]
+        for (let i = 0; i < this.activeLaunchPads.length; i++) {
+          const pad = this.activeLaunchPads[i]
           const dx = pointer.worldX - pad.x
           const dy = pointer.worldY - pad.y
           if (Math.sqrt(dx * dx + dy * dy) < LAUNCH_PAD_RADIUS + 30) {
@@ -3262,7 +4135,7 @@ export class BattlePhase implements Phase {
           const monsterId = this.pickerMonsterId!
           this.hidePicker(true)
           this.enterAimMode(monsterId, clickedPadIndex)
-          const pad = LAUNCH_PADS[clickedPadIndex]
+          const pad = this.activeLaunchPads[clickedPadIndex]
           this.aimStartPoint = { x: pad.x, y: pad.y }
           return
         }
@@ -3285,7 +4158,7 @@ export class BattlePhase implements Phase {
     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (!this.aimMode || !this.aimStartPoint || !this.aimLine) return
 
-      const activePad = LAUNCH_PADS[this.activeLaunchPadIndex]
+      const activePad = this.activeLaunchPads[this.activeLaunchPadIndex]
       const dragX = pointer.worldX - this.aimStartPoint.x
       const dragY = pointer.worldY - this.aimStartPoint.y
       const dragDist = Math.sqrt(dragX * dragX + dragY * dragY)
@@ -3472,6 +4345,11 @@ export class BattlePhase implements Phase {
     if (this.battleEnded) return
     this.battleEnded = true
 
+    // Track crystal survival
+    if (this.crystalAlive && this.crystalHP > 0) {
+      gameStore.dispatchRunState(run => recordCrystalSurvival(run))
+    }
+
     // 清空連射佇列
     this.burstQueue = []
     this.isBursting = false
@@ -3591,7 +4469,9 @@ export class BattlePhase implements Phase {
   // ============ 消耗品系統 ============
 
   private getEffectiveAllyLimit(): number {
-    return MAX_ALLIES + this.allyLimitBonus
+    // 詞綴：窄道 → 部署槽位 -1
+    const affixSlotChange = this.activeAffix?.modifier.deploySlotChange ?? 0
+    return Math.max(1, MAX_ALLIES + this.allyLimitBonus + affixSlotChange)
   }
 
   private applyPurchasedConsumables(): void {
@@ -3827,9 +4707,11 @@ export class BattlePhase implements Phase {
 
     if (!this.trapSystem) return
 
-    const trap = this.trapSystem.placeTrap(worldX, worldY, DATA_CONSTANTS.TRAP_DAMAGE_PERCENT, 30)
+    const spikeDef = DataRegistry.getTrapById('spike_trap')
+    if (!spikeDef) return
+    const trap = this.trapSystem.placeTrap(worldX, worldY, spikeDef)
     if (trap) {
-      this.createTrapVisual(trap.id, trap.x, trap.y, trap.triggerRadius)
+      this.createTrapVisual(trap.id, trap.x, trap.y, trap.triggerRadius, 'spike_trap')
       this.pendingTraps -= 1
     }
 
@@ -3972,6 +4854,10 @@ export class BattlePhase implements Phase {
       isDodgeInvincible: false,
       tauntTargetId: null,
       originalMoveSpeed: 0,
+      knockbackUntil: 0,
+      waypointPath: [],
+      currentWaypointIndex: -1,
+      targetCrystal: false,
     }
   }
 
@@ -3996,6 +4882,52 @@ export class BattlePhase implements Phase {
     // 從局內怪物列表取得可用怪物（去重複）
     const ids = [...new Set(state.run.monsters.map(m => m.monsterId))]
     return ids.length > 0 ? ids : ['goblin']
+  }
+
+  // ============ 詞綴橫幅 ============
+
+  private showAffixBanner(name: string, description: string): void {
+    const banner = this.scene.add.container(GAME_WIDTH / 2, ROOM_Y + ROOM_HEIGHT / 2)
+
+    const bg = this.scene.add.rectangle(0, 0, 280, 50, UI_BG, 0.9)
+    bg.setStrokeStyle(2, UI_ACCENT)
+    banner.add(bg)
+
+    const nameText = this.scene.add.text(0, -10, name, {
+      fontSize: '18px', color: '#ffaa33', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 3,
+    })
+    nameText.setOrigin(0.5)
+    banner.add(nameText)
+
+    const descText = this.scene.add.text(0, 12, description, {
+      fontSize: '12px', color: '#a8a0b8',
+      stroke: '#000000', strokeThickness: 2,
+    })
+    descText.setOrigin(0.5)
+    banner.add(descText)
+
+    banner.setDepth(30)
+    banner.setAlpha(0)
+
+    this.scene.tweens.add({
+      targets: banner,
+      alpha: 1,
+      duration: 300,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.scene.time.delayedCall(2000, () => {
+          this.scene.tweens.add({
+            targets: banner,
+            alpha: 0,
+            y: banner.y - 20,
+            duration: 500,
+            onComplete: () => banner.destroy(),
+          })
+        })
+      },
+    })
+    this.battleOverlayElements.push(banner)
   }
 
   // ============ 清理 ============
@@ -4111,6 +5043,25 @@ export class BattlePhase implements Phase {
     this.trapSystem?.cleanup()
     this.trapSystem = null
 
+    // 清理水晶
+    this.crystalSprite?.destroy()
+    this.crystalSprite = null
+    this.crystalHPBar?.destroy()
+    this.crystalHPBar = null
+
+    // 清理障礙物
+    for (const obs of this.obstacleSprites) {
+      if (obs.sprite.active) obs.sprite.destroy()
+      obs.hpBar?.destroy()
+    }
+    this.obstacleSprites = []
+    this.obstacleGroup?.destroy(true)
+    this.obstacleGroup = null
+
+    // 重置 layout 相關欄位
+    this.currentLayout = null
+    this.activeLaunchPads = []
+
     // 移除 Physics collider（必須在 destroy groups 之前）
     if (this.collider) {
       this.collider.destroy()
@@ -4122,5 +5073,335 @@ export class BattlePhase implements Phase {
     this.allyGroup = null
     this.enemyGroup?.destroy(true)
     this.enemyGroup = null
+  }
+
+  // ============ 佈陣階段 ============
+
+  private showDeploymentUI(): void {
+    // 顯示敵人入口方向箭頭
+    this.showBreachArrow()
+
+    // 建立底部陷阱選擇面板
+    this.createDeployTrapPanel()
+
+    // 建立「開戰」按鈕
+    this.createStartBattleButton()
+
+    // 房間內點擊放置陷阱
+    this.setupDeploymentInput()
+  }
+
+  private showBreachArrow(): void {
+    const breachPos = getBreachPosition(this.breachDirection)
+    const arrow = this.scene.add.container(breachPos.x, breachPos.y)
+    arrow.setDepth(25)
+
+    // 紅色箭頭指向房間內部
+    const g = this.scene.add.graphics()
+    g.fillStyle(0xff4444, 0.8)
+
+    // 根據方向繪製箭頭
+    const size = 16
+    switch (this.breachDirection) {
+      case 'up':
+        g.fillTriangle(0, -size, -size * 0.7, size * 0.3, size * 0.7, size * 0.3)
+        break
+      case 'down':
+        g.fillTriangle(0, size, -size * 0.7, -size * 0.3, size * 0.7, -size * 0.3)
+        break
+      case 'left':
+        g.fillTriangle(-size, 0, size * 0.3, -size * 0.7, size * 0.3, size * 0.7)
+        break
+      case 'right':
+        g.fillTriangle(size, 0, -size * 0.3, -size * 0.7, -size * 0.3, size * 0.7)
+        break
+    }
+    arrow.add(g)
+
+    // 「敵人入口」標籤
+    const label = this.scene.add.text(0, this.breachDirection === 'up' ? -28 : 28, '敵人入口', {
+      fontSize: '11px', color: '#ff6644', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 2,
+    })
+    label.setOrigin(0.5)
+    arrow.add(label)
+
+    // 脈動動畫
+    this.scene.tweens.add({
+      targets: arrow,
+      alpha: { from: 0.6, to: 1 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+    })
+
+    this.breachArrow = arrow
+    this.battleOverlayElements.push(arrow)
+  }
+
+  private createDeployTrapPanel(): void {
+    const run = gameStore.getState().run
+    const allTraps = DataRegistry.getAllTraps()
+    const ownedTraps = allTraps.filter(t => (run.trapInventory[t.id] ?? 0) > 0)
+
+    if (ownedTraps.length === 0) return
+
+    const panelY = ROOM_Y + ROOM_HEIGHT + 115
+    const cardW = 68
+    const cardH = 60
+    const gap = 6
+    const totalW = ownedTraps.length * cardW + (ownedTraps.length - 1) * gap
+    const startX = (GAME_WIDTH - totalW) / 2
+
+    const container = this.scene.add.container(0, 0)
+    container.setDepth(20)
+
+    // 標題
+    const title = this.scene.add.text(GAME_WIDTH / 2, panelY - 16, '選擇陷阱放置', {
+      fontSize: '13px', color: '#a8a0b8', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 2,
+    })
+    title.setOrigin(0.5)
+    container.add(title)
+
+    for (let i = 0; i < ownedTraps.length; i++) {
+      const def = ownedTraps[i]
+      const count = run.trapInventory[def.id] ?? 0
+      const cx = startX + i * (cardW + gap)
+      const cy = panelY
+
+      // 卡片背景
+      const bg = this.scene.add.rectangle(cx + cardW / 2, cy + cardH / 2, cardW, cardH, 0x1a1428, 0.85)
+      bg.setStrokeStyle(1.5, this.selectedTrapDefId === def.id ? 0xffaa33 : 0x6a5acd)
+      bg.setInteractive({ useHandCursor: true })
+      container.add(bg)
+
+      // 名稱
+      const name = this.scene.add.text(cx + cardW / 2, cy + 14, def.name, {
+        fontSize: '11px', color: '#f0e8d8', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2,
+      })
+      name.setOrigin(0.5)
+      container.add(name)
+
+      // 數量
+      const countText = this.scene.add.text(cx + cardW / 2, cy + 32, `x${count}`, {
+        fontSize: '13px', color: '#ffd700', fontFamily: 'monospace', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2,
+      })
+      countText.setOrigin(0.5)
+      container.add(countText)
+
+      // 描述（縮短）
+      const shortDesc = def.description.length > 8 ? def.description.substring(0, 8) + '...' : def.description
+      const desc = this.scene.add.text(cx + cardW / 2, cy + 48, shortDesc, {
+        fontSize: '9px', color: '#a8a0b8',
+        stroke: '#000000', strokeThickness: 1,
+      })
+      desc.setOrigin(0.5)
+      container.add(desc)
+
+      // 點擊選擇
+      bg.on('pointerup', () => {
+        this.selectedTrapDefId = def.id
+        this.refreshDeployTrapPanel()
+      })
+    }
+
+    this.deployTrapUI = container
+    this.battleOverlayElements.push(container)
+  }
+
+  private refreshDeployTrapPanel(): void {
+    if (this.deployTrapUI) {
+      const old = this.deployTrapUI
+      this.deployTrapUI = null
+      // Remove from battleOverlayElements before destroying
+      this.battleOverlayElements = this.battleOverlayElements.filter(el => el !== old)
+      old.destroy(true)
+    }
+    this.createDeployTrapPanel()
+  }
+
+  private createStartBattleButton(): void {
+    const btnX = GAME_WIDTH / 2
+    const btnY = ROOM_Y + ROOM_HEIGHT + 190
+
+    const container = this.scene.add.container(btnX, btnY)
+    container.setDepth(25)
+
+    // 按鈕背景
+    const bg = this.scene.add.rectangle(0, 0, 160, 40, 0x1a1428, 0.95)
+    bg.setStrokeStyle(2, 0xffaa33)
+    bg.setInteractive({ useHandCursor: true })
+    container.add(bg)
+
+    // 按鈕文字
+    const text = this.scene.add.text(0, 0, '開戰！', {
+      fontSize: '20px', color: '#ffaa33', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 3,
+    })
+    text.setOrigin(0.5)
+    container.add(text)
+
+    // 脈動效果
+    this.scene.tweens.add({
+      targets: bg,
+      strokeAlpha: { from: 0.5, to: 1 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+    })
+
+    // 點擊開戰
+    bg.on('pointerup', () => {
+      this.onStartBattle()
+    })
+
+    // hover 效果
+    bg.on('pointerover', () => {
+      bg.setFillStyle(0x221a30, 0.95)
+      text.setColor('#ffffff')
+    })
+    bg.on('pointerout', () => {
+      bg.setFillStyle(0x1a1428, 0.95)
+      text.setColor('#ffaa33')
+    })
+
+    this.startBattleButton = container
+    this.battleOverlayElements.push(container)
+  }
+
+  private setupDeploymentInput(): void {
+    // 點擊房間區域放置陷阱
+    const roomHitArea = this.scene.add.rectangle(
+      ROOM_X + ROOM_WIDTH / 2,
+      ROOM_Y + ROOM_HEIGHT / 2,
+      ROOM_WIDTH - 20,
+      ROOM_HEIGHT - 20,
+      0x000000, 0,
+    )
+    roomHitArea.setDepth(15)
+    roomHitArea.setInteractive({ useHandCursor: false })
+
+    roomHitArea.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (!this.selectedTrapDefId || this.battleSubState !== 'deploying') return
+
+      // 顯示放置預覽
+      const def = DataRegistry.getTrapById(this.selectedTrapDefId)
+      if (!def) return
+
+      if (!this.trapPreviewCircle) {
+        this.trapPreviewCircle = this.scene.add.graphics()
+        this.trapPreviewCircle.setDepth(16)
+        this.battleOverlayElements.push(this.trapPreviewCircle)
+      }
+
+      this.trapPreviewCircle.clear()
+      this.trapPreviewCircle.lineStyle(1.5, 0xffaa33, 0.6)
+      this.trapPreviewCircle.strokeCircle(pointer.x, pointer.y, def.triggerRadius)
+      this.trapPreviewCircle.fillStyle(0xffaa33, 0.1)
+      this.trapPreviewCircle.fillCircle(pointer.x, pointer.y, def.triggerRadius)
+    })
+
+    roomHitArea.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (!this.selectedTrapDefId || this.battleSubState !== 'deploying') return
+
+      const def = DataRegistry.getTrapById(this.selectedTrapDefId)
+      if (!def) return
+
+      // 檢查庫存
+      const run = gameStore.getState().run
+      const count = run.trapInventory[def.id] ?? 0
+      if (count <= 0) {
+        this.selectedTrapDefId = null
+        this.refreshDeployTrapPanel()
+        return
+      }
+
+      // 放置陷阱
+      const instanceId = `placed_trap_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+
+      // 更新狀態（從庫存移到已放置）
+      gameStore.dispatchRunState(run => {
+        const currentCount = run.trapInventory[def.id] ?? 0
+        if (currentCount <= 0) return run
+        return {
+          ...run,
+          trapInventory: {
+            ...run.trapInventory,
+            [def.id]: currentCount - 1,
+          },
+          placedTraps: [...run.placedTraps, { trapId: instanceId, definitionId: def.id, x: pointer.x, y: pointer.y }],
+        }
+      })
+
+      // 在 TrapSystem 中放置
+      if (this.trapSystem) {
+        this.trapSystem.placeTrapWithId(instanceId, pointer.x, pointer.y, def)
+      }
+
+      // 建立視覺效果
+      this.createTrapVisual(instanceId, pointer.x, pointer.y, def.triggerRadius, def.id)
+
+      // 檢查是否還有庫存
+      const updatedRun = gameStore.getState().run
+      const remaining = updatedRun.trapInventory[def.id] ?? 0
+      if (remaining <= 0) {
+        this.selectedTrapDefId = null
+      }
+
+      // 刷新面板
+      this.refreshDeployTrapPanel()
+    })
+
+    this.battleOverlayElements.push(roomHitArea)
+  }
+
+  private onStartBattle(): void {
+    this.battleSubState = 'fighting'
+
+    // 清理佈陣 UI
+    if (this.deployTrapUI) {
+      this.scene.tweens.add({
+        targets: this.deployTrapUI,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => {
+          this.deployTrapUI?.destroy(true)
+          this.deployTrapUI = null
+        },
+      })
+    }
+    if (this.startBattleButton) {
+      this.scene.tweens.add({
+        targets: this.startBattleButton,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => {
+          this.startBattleButton?.destroy(true)
+          this.startBattleButton = null
+        },
+      })
+    }
+    if (this.breachArrow) {
+      this.breachArrow.destroy(true)
+      this.breachArrow = null
+    }
+    if (this.trapPreviewCircle) {
+      this.trapPreviewCircle.destroy()
+      this.trapPreviewCircle = null
+    }
+
+    // 開始正常戰鬥流程
+    this.playBreachAnimation(() => {
+      this.spawnChickens()
+      this.startNextWave()
+    })
+
+    // 顯示詞綴橫幅
+    if (this.activeAffix) {
+      this.showAffixBanner(this.activeAffix.name, this.activeAffix.description)
+    }
   }
 }

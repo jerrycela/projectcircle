@@ -13,6 +13,7 @@ import type {
   ConsumableDefinition,
   BattleWaveConfig,
   MonsterRarity,
+  TrapDefinition,
 } from './schemas'
 
 // 怪物資料
@@ -23,6 +24,8 @@ import { ogre } from './monsters/ogre'
 // 英雄資料
 import { adventurer } from './heroes/adventurer'
 import { paladin } from './heroes/paladin'
+import { thief } from './heroes/thief'
+import { priest } from './heroes/priest'
 
 // 房間資料
 import { dungeonHeart } from './rooms/dungeon-heart'
@@ -68,6 +71,8 @@ export class DataRegistry {
   private static readonly heroes: readonly HeroDefinition[] = [
     adventurer,
     paladin,
+    thief,
+    priest,
   ]
 
   static getAllHeroes(): readonly HeroDefinition[] {
@@ -192,6 +197,76 @@ export class DataRegistry {
     return this.affixes.find(a => a.id === id)
   }
 
+  // ============ 陷阱查詢 ============
+
+  private static readonly traps: readonly TrapDefinition[] = [
+    {
+      id: 'spike_trap',
+      name: '尖刺地板',
+      category: 'instant_damage',
+      cost: 15,
+      sellbackRatio: 0.5,
+      triggerRadius: 30,
+      damagePercent: 0.3,
+      description: '踩到的敵人受到其最大 HP 30% 的傷害',
+    },
+    {
+      id: 'slow_swamp',
+      name: '減速沼澤',
+      category: 'persistent_area',
+      cost: 20,
+      sellbackRatio: 0.5,
+      triggerRadius: 50,
+      slowPercent: 0.5,
+      description: '範圍內敵人移動速度降低 50%',
+    },
+    {
+      id: 'bouncer',
+      name: '彈跳板',
+      category: 'displacement',
+      cost: 35,
+      sellbackRatio: 0.5,
+      triggerRadius: 25,
+      displacement: {
+        force: 200,
+        enemyOnly: true,
+      },
+      description: '踩到的敵人被彈飛（只對敵方生效）',
+    },
+    {
+      id: 'weaken_totem',
+      name: '弱化圖騰',
+      category: 'persistent_area',
+      cost: 30,
+      sellbackRatio: 0.5,
+      triggerRadius: 60,
+      damageMultiplier: 1.5,
+      description: '範圍內敵人受到的傷害增加 50%',
+    },
+    {
+      id: 'alarm_bell',
+      name: '警報鈴',
+      category: 'buff_trigger',
+      cost: 25,
+      sellbackRatio: 0.5,
+      triggerRadius: 30,
+      buffEffect: {
+        attackSpeedMultiplier: 1.3,
+        duration: 5000,
+        radius: 120,
+      },
+      description: '敵人踩到後，附近我方怪物攻速 +30%（持續 5 秒）',
+    },
+  ]
+
+  static getAllTraps(): readonly TrapDefinition[] {
+    return this.traps
+  }
+
+  static getTrapById(id: string): TrapDefinition | undefined {
+    return this.traps.find(t => t.id === id)
+  }
+
   // ============ 消耗品查詢 ============
 
   private static readonly consumables: readonly ConsumableDefinition[] = [
@@ -199,7 +274,7 @@ export class DataRegistry {
       id: 'spike_trap',
       name: '尖刺陷阱',
       type: 'trap',
-      cost: 30,
+      cost: 15,
       description: '一次性定點傷害，對踩到的敵人造成其最大 HP 30% 的傷害',
     },
     {
@@ -265,27 +340,27 @@ export class DataRegistry {
       totalWaves: 3,
       waves: [
         { waveNumber: 1, entries: [{ heroId: 'adventurer', count: 3 }] },
-        { waveNumber: 2, entries: [{ heroId: 'adventurer', count: 2 }, { heroId: 'paladin', count: 1 }] },
-        { waveNumber: 3, entries: [{ heroId: 'paladin', count: 1 }] },
+        { waveNumber: 2, entries: [{ heroId: 'adventurer', count: 2 }, { heroId: 'thief', count: 1 }] },
+        { waveNumber: 3, entries: [{ heroId: 'paladin', count: 1 }, { heroId: 'priest', count: 1 }] },
       ],
       variant: [
-        { waveNumber: 1, entries: [{ heroId: 'adventurer', count: 3 }] },
-        { waveNumber: 2, entries: [{ heroId: 'adventurer', count: 3 }] },
-        { waveNumber: 3, entries: [{ heroId: 'paladin', count: 1 }, { heroId: 'adventurer', count: 1 }] },
+        { waveNumber: 1, entries: [{ heroId: 'adventurer', count: 2 }, { heroId: 'thief', count: 1 }] },
+        { waveNumber: 2, entries: [{ heroId: 'adventurer', count: 2 }, { heroId: 'priest', count: 1 }] },
+        { waveNumber: 3, entries: [{ heroId: 'paladin', count: 1 }, { heroId: 'thief', count: 1 }] },
       ],
     },
     {
       roomDistance: 4,
       totalWaves: 3,
       waves: [
-        { waveNumber: 1, entries: [{ heroId: 'adventurer', count: 3 }] },
-        { waveNumber: 2, entries: [{ heroId: 'adventurer', count: 2 }, { heroId: 'paladin', count: 1 }] },
-        { waveNumber: 3, entries: [{ heroId: 'paladin', count: 1 }, { heroId: 'adventurer', count: 2 }] },
+        { waveNumber: 1, entries: [{ heroId: 'adventurer', count: 2 }, { heroId: 'thief', count: 1 }] },
+        { waveNumber: 2, entries: [{ heroId: 'adventurer', count: 2 }, { heroId: 'paladin', count: 1 }, { heroId: 'priest', count: 1 }] },
+        { waveNumber: 3, entries: [{ heroId: 'paladin', count: 1 }, { heroId: 'thief', count: 2 }] },
       ],
       variant: [
         { waveNumber: 1, entries: [{ heroId: 'adventurer', count: 2 }, { heroId: 'paladin', count: 1 }] },
-        { waveNumber: 2, entries: [{ heroId: 'adventurer', count: 2 }, { heroId: 'paladin', count: 1 }] },
-        { waveNumber: 3, entries: [{ heroId: 'adventurer', count: 3 }] },
+        { waveNumber: 2, entries: [{ heroId: 'thief', count: 2 }, { heroId: 'priest', count: 1 }] },
+        { waveNumber: 3, entries: [{ heroId: 'adventurer', count: 2 }, { heroId: 'paladin', count: 1 }] },
       ],
     },
   ]

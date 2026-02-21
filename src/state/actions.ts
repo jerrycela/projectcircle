@@ -5,6 +5,7 @@
 
 import type { RunState, MonsterInstance, GameState, AccountState } from './game-state'
 import { createInitialRunState } from './game-state'
+import type { AffixType, PlacedTrapData } from '../data/schemas'
 
 /**
  * 開始新局
@@ -393,5 +394,135 @@ export function completeRun(state: AccountState): AccountState {
   return {
     ...state,
     completedRuns: state.completedRuns + 1,
+  }
+}
+
+/**
+ * Buy a trap (add to inventory)
+ */
+export function buyTrap(state: RunState, trapId: string, cost: number): RunState {
+  if (state.gold < cost) return state
+  const currentCount = state.trapInventory[trapId] ?? 0
+  return {
+    ...state,
+    gold: state.gold - cost,
+    trapInventory: {
+      ...state.trapInventory,
+      [trapId]: currentCount + 1,
+    },
+  }
+}
+
+/**
+ * Sell a trap from inventory (get partial gold back)
+ */
+export function sellTrapFromInventory(state: RunState, trapId: string, sellbackGold: number): RunState {
+  const currentCount = state.trapInventory[trapId] ?? 0
+  if (currentCount <= 0) return state
+  return {
+    ...state,
+    gold: state.gold + sellbackGold,
+    trapInventory: {
+      ...state.trapInventory,
+      [trapId]: currentCount - 1,
+    },
+  }
+}
+
+/**
+ * Place a trap on the room (move from inventory to placed)
+ */
+export function placeTrap(state: RunState, trapId: string, instanceId: string, x: number, y: number): RunState {
+  const currentCount = state.trapInventory[trapId] ?? 0
+  if (currentCount <= 0) return state
+  const newPlaced: PlacedTrapData = { trapId: instanceId, definitionId: trapId, x, y }
+  return {
+    ...state,
+    trapInventory: {
+      ...state.trapInventory,
+      [trapId]: currentCount - 1,
+    },
+    placedTraps: [...state.placedTraps, newPlaced],
+  }
+}
+
+/**
+ * Remove a placed trap (return to inventory)
+ */
+export function removePlacedTrap(state: RunState, instanceId: string): RunState {
+  const trap = state.placedTraps.find(t => t.trapId === instanceId)
+  if (!trap) return state
+  const currentCount = state.trapInventory[trap.definitionId] ?? 0
+  return {
+    ...state,
+    trapInventory: {
+      ...state.trapInventory,
+      [trap.definitionId]: currentCount + 1,
+    },
+    placedTraps: state.placedTraps.filter(t => t.trapId !== instanceId),
+  }
+}
+
+/**
+ * Sell a placed trap (remove and get gold)
+ */
+export function sellPlacedTrap(state: RunState, instanceId: string, sellbackGold: number): RunState {
+  const trap = state.placedTraps.find(t => t.trapId === instanceId)
+  if (!trap) return state
+  return {
+    ...state,
+    gold: state.gold + sellbackGold,
+    placedTraps: state.placedTraps.filter(t => t.trapId !== instanceId),
+  }
+}
+
+/**
+ * Set the current room affix
+ */
+export function setRoomAffix(state: RunState, affix: AffixType | null): RunState {
+  return {
+    ...state,
+    currentAffix: affix,
+  }
+}
+
+/**
+ * Clear all placed traps (for room transition)
+ */
+export function clearPlacedTraps(state: RunState): RunState {
+  return {
+    ...state,
+    placedTraps: [],
+  }
+}
+
+/**
+ * Set the current room layout
+ */
+export function setRoomLayout(state: RunState, layoutId: string | null): RunState {
+  return {
+    ...state,
+    currentLayoutId: layoutId,
+  }
+}
+
+/**
+ * Damage the dungeon crystal
+ */
+export function damageCrystal(state: RunState, damage: number): RunState {
+  const newHP = Math.max(0, state.crystalHP - damage)
+  return {
+    ...state,
+    crystalHP: newHP,
+  }
+}
+
+/**
+ * Record that the crystal survived this room (called at battle end if HP > 0)
+ */
+export function recordCrystalSurvival(state: RunState): RunState {
+  return {
+    ...state,
+    crystalsIntact: state.crystalsIntact + 1,
   }
 }

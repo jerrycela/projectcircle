@@ -4,11 +4,11 @@
  */
 
 /**
- * 計算傷害值
- * Prototype 階段：直接返回 ATK，不做 miss/crit/防禦
+ * Calculate damage value
+ * Supports damage multiplier for debuff effects (e.g. weaken totem: 1.5 = +50% damage)
  */
-export function calculateDamage(attackerATK: number): number {
-  return attackerATK
+export function calculateDamage(attackerATK: number, damageMultiplier: number = 1.0): number {
+  return Math.floor(attackerATK * damageMultiplier)
 }
 
 /**

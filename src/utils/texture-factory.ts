@@ -22,6 +22,10 @@ export const TEXTURE_KEYS = {
   ICON_HEART: 'tex_icon_heart',       // 10x10
   ICON_WAVE: 'tex_icon_wave',         // 10x10
   ICON_TRAP: 'tex_icon_trap',         // 12x12
+  ICON_TRAP_SWAMP: 'tex_icon_trap_swamp',     // 12x12
+  ICON_TRAP_BOUNCER: 'tex_icon_trap_bouncer', // 12x12
+  ICON_TRAP_TOTEM: 'tex_icon_trap_totem',     // 12x12
+  ICON_TRAP_ALARM: 'tex_icon_trap_alarm',     // 12x12
   SHADOW: 'tex_shadow',               // 12x6
   // 進化型獨立紋理
   GOBLIN_ASSASSIN: 'tex_goblin_assassin',   // 12x12
@@ -30,6 +34,10 @@ export const TEXTURE_KEYS = {
   SKELETON_MAGE: 'tex_skeleton_mage',       // 12x14
   IRONCLAD_OGRE: 'tex_ironclad_ogre',       // 14x14
   BERSERKER_OGRE: 'tex_berserker_ogre',     // 14x14
+  OBSTACLE_WALL: 'tex_obstacle_wall',         // 16x16
+  OBSTACLE_CRATE: 'tex_obstacle_crate',       // 16x16
+  THIEF: 'tex_thief',                         // 12x14
+  PRIEST: 'tex_priest',                       // 12x14
 } as const
 
 // ============ 像素藝術調色盤 ============
@@ -92,6 +100,26 @@ const WAVE_HANDLE = 0x8a6a4a
 const TRAP_SPIKE = 0xcc6644
 const TRAP_BASE = 0x666666
 
+// 沼澤陷阱
+const SWAMP_GREEN = 0x33aa55
+const SWAMP_DARK = 0x227744
+const SWAMP_BUBBLE = 0x55cc77
+
+// 彈跳板
+const BOUNCE_YELLOW = 0xddcc22
+const BOUNCE_DARK = 0xaa9911
+const BOUNCE_SPRING = 0xeeee44
+
+// 弱化圖騰
+const TOTEM_PURPLE = 0x9933cc
+const TOTEM_DARK = 0x6622aa
+const TOTEM_GLOW = 0xbb55ee
+
+// 警報鈴
+const ALARM_ORANGE = 0xdd7722
+const ALARM_DARK = 0xaa5511
+const ALARM_RING = 0xffaa44
+
 // 哥布林刺客
 const ASSN_CLOAK = 0x5a3a7a
 const ASSN_DARK = 0x3a2a5a
@@ -122,11 +150,36 @@ const IRON_DARK = 0x666688
 const IRON_LIGHT = 0xaaaacc
 const IRON_RIVET = 0xbbbbdd
 
+// Stone pillar obstacle
+const STONE_BASE = 0x3a3a4a
+const STONE_LIGHT = 0x4a4a5e
+const STONE_DARK = 0x2a2a36
+const STONE_HIGHLIGHT = 0x5a5a6e
+
+// Wooden crate obstacle
+const CRATE_BASE = 0x8b6914
+const CRATE_LIGHT = 0xa88030
+const CRATE_DARK = 0x6b4f0e
+const CRATE_NAIL = 0xaaaaaa
+
 // 狂戰士食人魔
 const BERSERK_SKIN = 0x9a6a3a
 const BERSERK_RAGE = 0xcc3333
 const BERSERK_AXE = 0x888888
 const BERSERK_DARK = 0x6a4a2a
+
+// 盜賊英雄
+const THIEF_CLOAK = 0x2a4a2a
+const THIEF_CLOAK_LIGHT = 0x3a6a3a
+const THIEF_MASK = 0x1a1a2a
+const THIEF_BLADE = 0xccccdd
+
+// Priest hero
+const PRIEST_ROBE = 0xddddcc
+const PRIEST_ROBE_LIGHT = 0xeeeedc
+const PRIEST_ROBE_DARK = 0xbbbb9a
+const PRIEST_STAFF = 0x8b6914
+const PRIEST_GLOW = 0x44dd88
 
 // ============ 輔助函式 ============
 
@@ -766,6 +819,117 @@ function generateIconTrap(scene: Phaser.Scene): void {
   g.destroy()
 }
 
+function generateIconTrapSwamp(scene: Phaser.Scene): void {
+  const g = scene.add.graphics()
+  const W = 12, H = 12
+
+  // 沼澤水面（波浪狀）
+  rect(g, 1, 7, 10, 4, SWAMP_DARK)
+  hline(g, 0, 7, 12, SWAMP_GREEN)
+  // 波紋
+  px(g, 3, 8, SWAMP_BUBBLE)
+  px(g, 7, 9, SWAMP_BUBBLE)
+  px(g, 5, 8, SWAMP_BUBBLE)
+  // 冒泡（上方）
+  px(g, 4, 5, SWAMP_GREEN)
+  px(g, 4, 4, SWAMP_BUBBLE)
+  px(g, 8, 4, SWAMP_GREEN)
+  px(g, 8, 3, SWAMP_BUBBLE)
+  // 小草/蘆葦
+  vline(g, 2, 3, 4, SWAMP_GREEN)
+  px(g, 1, 3, SWAMP_DARK)
+  vline(g, 10, 4, 3, SWAMP_GREEN)
+  px(g, 11, 4, SWAMP_DARK)
+
+  g.generateTexture(TEXTURE_KEYS.ICON_TRAP_SWAMP, W, H)
+  g.destroy()
+}
+
+function generateIconTrapBouncer(scene: Phaser.Scene): void {
+  const g = scene.add.graphics()
+  const W = 12, H = 12
+
+  // 底座平台
+  rect(g, 2, 9, 8, 2, TRAP_BASE)
+  hline(g, 1, 11, 10, 0x555555)
+  // 彈簧（鋸齒狀）
+  px(g, 4, 8, BOUNCE_SPRING)
+  px(g, 5, 7, BOUNCE_YELLOW)
+  px(g, 6, 6, BOUNCE_SPRING)
+  px(g, 7, 7, BOUNCE_YELLOW)
+  px(g, 8, 8, BOUNCE_SPRING)
+  // 彈跳方向箭頭（向上）
+  px(g, 6, 2, BOUNCE_YELLOW)
+  px(g, 5, 3, BOUNCE_YELLOW)
+  px(g, 7, 3, BOUNCE_YELLOW)
+  px(g, 4, 4, BOUNCE_DARK)
+  px(g, 8, 4, BOUNCE_DARK)
+  // 速度線
+  vline(g, 6, 3, 3, BOUNCE_SPRING)
+
+  g.generateTexture(TEXTURE_KEYS.ICON_TRAP_BOUNCER, W, H)
+  g.destroy()
+}
+
+function generateIconTrapTotem(scene: Phaser.Scene): void {
+  const g = scene.add.graphics()
+  const W = 12, H = 12
+
+  // 圖騰柱身
+  rect(g, 4, 3, 4, 8, TOTEM_DARK)
+  vline(g, 5, 3, 8, TOTEM_PURPLE)
+  vline(g, 6, 3, 8, TOTEM_PURPLE)
+  // 頂部裝飾
+  rect(g, 3, 2, 6, 2, TOTEM_PURPLE)
+  px(g, 3, 1, TOTEM_DARK)
+  px(g, 8, 1, TOTEM_DARK)
+  // 發光眼睛
+  px(g, 5, 4, TOTEM_GLOW)
+  px(g, 6, 4, TOTEM_GLOW)
+  // 紫色光環（兩側）
+  px(g, 2, 5, TOTEM_GLOW, 0.5)
+  px(g, 9, 5, TOTEM_GLOW, 0.5)
+  px(g, 1, 6, TOTEM_GLOW, 0.3)
+  px(g, 10, 6, TOTEM_GLOW, 0.3)
+  // 底座
+  hline(g, 3, 11, 6, TOTEM_DARK)
+
+  g.generateTexture(TEXTURE_KEYS.ICON_TRAP_TOTEM, W, H)
+  g.destroy()
+}
+
+function generateIconTrapAlarm(scene: Phaser.Scene): void {
+  const g = scene.add.graphics()
+  const W = 12, H = 12
+
+  // 鈴鐺身體（梯形）
+  rect(g, 4, 4, 4, 5, ALARM_ORANGE)
+  rect(g, 3, 6, 6, 3, ALARM_ORANGE)
+  hline(g, 2, 9, 8, ALARM_DARK)
+  // 鈴鐺頂部
+  px(g, 5, 3, ALARM_DARK)
+  px(g, 6, 3, ALARM_DARK)
+  px(g, 5, 2, ALARM_ORANGE)
+  px(g, 6, 2, ALARM_ORANGE)
+  // 掛環
+  px(g, 5, 1, ALARM_DARK)
+  px(g, 6, 1, ALARM_DARK)
+  // 鈴舌
+  px(g, 5, 10, ALARM_DARK)
+  px(g, 6, 10, ALARM_DARK)
+  // 高光
+  px(g, 5, 5, ALARM_RING)
+  px(g, 4, 7, ALARM_RING)
+  // 音波線
+  px(g, 1, 5, ALARM_RING, 0.5)
+  px(g, 0, 6, ALARM_RING, 0.3)
+  px(g, 10, 5, ALARM_RING, 0.5)
+  px(g, 11, 6, ALARM_RING, 0.3)
+
+  g.generateTexture(TEXTURE_KEYS.ICON_TRAP_ALARM, W, H)
+  g.destroy()
+}
+
 function generateShadow(scene: Phaser.Scene): void {
   const g = scene.add.graphics()
   const W = 12, H = 6
@@ -1176,6 +1340,186 @@ function generateBerserkerOgre(scene: Phaser.Scene): void {
   g.destroy()
 }
 
+function generateThiefTexture(scene: Phaser.Scene): void {
+  const W = 12, H = 14
+  const g = scene.add.graphics()
+
+  // Hood/cloak body
+  g.fillStyle(THIEF_CLOAK, 1)
+  g.fillRect(3, 0, 6, 3)    // hood top
+  g.fillRect(2, 3, 8, 5)    // cloak torso
+  g.fillRect(3, 8, 6, 3)    // cloak lower
+
+  // Hood highlight
+  g.fillStyle(THIEF_CLOAK_LIGHT, 1)
+  g.fillRect(4, 0, 4, 1)
+  g.fillRect(3, 1, 2, 1)
+
+  // Face (mask)
+  g.fillStyle(THIEF_MASK, 1)
+  g.fillRect(4, 2, 4, 2)
+
+  // Eyes (gleaming)
+  g.fillStyle(0xffdd44, 1)
+  g.fillRect(5, 2, 1, 1)
+  g.fillRect(7, 2, 1, 1)
+
+  // Legs
+  g.fillStyle(THIEF_CLOAK, 1)
+  g.fillRect(4, 11, 2, 3)
+  g.fillRect(7, 11, 2, 3)
+
+  // Dagger (right hand)
+  g.fillStyle(THIEF_BLADE, 1)
+  g.fillRect(10, 4, 1, 4)
+  g.fillRect(10, 3, 2, 1)  // blade tip
+
+  // Boots
+  g.fillStyle(0x3a2a1a, 1)
+  g.fillRect(3, 13, 3, 1)
+  g.fillRect(6, 13, 3, 1)
+
+  g.generateTexture(TEXTURE_KEYS.THIEF, W, H)
+  g.destroy()
+}
+
+function generateStoneWallTexture(scene: Phaser.Scene): void {
+  const W = 16, H = 16
+  const g = scene.add.graphics()
+
+  // Fill base
+  g.fillStyle(STONE_BASE, 1)
+  g.fillRect(0, 0, W, H)
+
+  // Mortar lines
+  g.fillStyle(STONE_DARK, 1)
+  for (let x = 0; x < W; x++) {
+    g.fillRect(x, 5, 1, 1)
+    g.fillRect(x, 11, 1, 1)
+  }
+  // Vertical mortar
+  g.fillRect(8, 0, 1, 5)
+  g.fillRect(4, 6, 1, 5)
+  g.fillRect(12, 6, 1, 5)
+  g.fillRect(8, 12, 1, 4)
+
+  // Highlights
+  g.fillStyle(STONE_HIGHLIGHT, 1)
+  for (let y = 0; y < H; y++) {
+    g.fillRect(0, y, 1, 1)
+  }
+  for (let x = 0; x < W; x++) {
+    g.fillRect(x, 0, 1, 1)
+  }
+
+  // Light accents
+  g.fillStyle(STONE_LIGHT, 1)
+  g.fillRect(3, 2, 1, 1)
+  g.fillRect(10, 2, 1, 1)
+  g.fillRect(6, 8, 1, 1)
+  g.fillRect(13, 8, 1, 1)
+  g.fillRect(3, 13, 1, 1)
+  g.fillRect(11, 14, 1, 1)
+
+  g.generateTexture(TEXTURE_KEYS.OBSTACLE_WALL, W, H)
+  g.destroy()
+}
+
+function generateCrateTexture(scene: Phaser.Scene): void {
+  const W = 16, H = 16
+  const g = scene.add.graphics()
+
+  // Fill base
+  g.fillStyle(CRATE_BASE, 1)
+  g.fillRect(0, 0, W, H)
+
+  // Border
+  g.fillStyle(CRATE_DARK, 1)
+  for (let i = 0; i < W; i++) {
+    g.fillRect(i, 0, 1, 1)   // top
+    g.fillRect(i, H-1, 1, 1) // bottom
+  }
+  for (let i = 0; i < H; i++) {
+    g.fillRect(0, i, 1, 1)   // left
+    g.fillRect(W-1, i, 1, 1) // right
+  }
+
+  // Plank lines
+  for (let x = 1; x < W-1; x++) {
+    g.fillRect(x, 5, 1, 1)
+    g.fillRect(x, 10, 1, 1)
+  }
+
+  // Light wood grain
+  g.fillStyle(CRATE_LIGHT, 1)
+  g.fillRect(2, 2, 1, 1)
+  g.fillRect(7, 3, 1, 1)
+  g.fillRect(12, 2, 1, 1)
+  g.fillRect(4, 7, 1, 1)
+  g.fillRect(9, 8, 1, 1)
+  g.fillRect(3, 12, 1, 1)
+  g.fillRect(10, 13, 1, 1)
+
+  // Nail heads
+  g.fillStyle(CRATE_NAIL, 1)
+  g.fillRect(3, 3, 1, 1)
+  g.fillRect(12, 3, 1, 1)
+  g.fillRect(3, 12, 1, 1)
+  g.fillRect(12, 12, 1, 1)
+
+  g.generateTexture(TEXTURE_KEYS.OBSTACLE_CRATE, W, H)
+  g.destroy()
+}
+
+function generatePriestTexture(scene: Phaser.Scene): void {
+  const W = 12, H = 14
+  const g = scene.add.graphics()
+
+  // Staff (left side)
+  g.fillStyle(PRIEST_STAFF, 1)
+  g.fillRect(1, 1, 1, 11)
+  g.fillStyle(PRIEST_GLOW, 1)
+  g.fillRect(0, 0, 3, 2)  // staff head glow
+
+  // Hood
+  g.fillStyle(PRIEST_ROBE, 1)
+  g.fillRect(4, 0, 5, 3)
+
+  // Face
+  g.fillStyle(0xe8c8a0, 1)
+  g.fillRect(5, 1, 3, 2)
+
+  // Eyes
+  g.fillStyle(0x336633, 1)
+  g.fillRect(5, 1, 1, 1)
+  g.fillRect(7, 1, 1, 1)
+
+  // Robe body
+  g.fillStyle(PRIEST_ROBE, 1)
+  g.fillRect(3, 3, 7, 5)
+
+  // Robe lower (wider)
+  g.fillStyle(PRIEST_ROBE_DARK, 1)
+  g.fillRect(3, 8, 7, 3)
+
+  // Robe highlight
+  g.fillStyle(PRIEST_ROBE_LIGHT, 1)
+  g.fillRect(5, 4, 3, 1)
+
+  // Cross symbol on chest
+  g.fillStyle(PRIEST_GLOW, 1)
+  g.fillRect(6, 4, 1, 3)  // vertical
+  g.fillRect(5, 5, 3, 1)  // horizontal
+
+  // Feet
+  g.fillStyle(0x666655, 1)
+  g.fillRect(4, 11, 2, 3)
+  g.fillRect(7, 11, 2, 3)
+
+  g.generateTexture(TEXTURE_KEYS.PRIEST, W, H)
+  g.destroy()
+}
+
 // ============ 公開 API ============
 
 export function generateAllTextures(scene: Phaser.Scene): void {
@@ -1192,6 +1536,10 @@ export function generateAllTextures(scene: Phaser.Scene): void {
   generateIconHeart(scene)
   generateIconWave(scene)
   generateIconTrap(scene)
+  generateIconTrapSwamp(scene)
+  generateIconTrapBouncer(scene)
+  generateIconTrapTotem(scene)
+  generateIconTrapAlarm(scene)
   generateShadow(scene)
   // 進化型
   generateGoblinAssassin(scene)
@@ -1200,6 +1548,10 @@ export function generateAllTextures(scene: Phaser.Scene): void {
   generateSkeletonMage(scene)
   generateIroncladOgre(scene)
   generateBerserkerOgre(scene)
+  generateThiefTexture(scene)
+  generateStoneWallTexture(scene)
+  generateCrateTexture(scene)
+  generatePriestTexture(scene)
 }
 
 // ============ 單位 Texture 對照表 ============
@@ -1210,6 +1562,8 @@ export const UNIT_TEXTURE_MAP: Record<string, string> = {
   ogre: TEXTURE_KEYS.OGRE,
   adventurer: TEXTURE_KEYS.ADVENTURER,
   paladin: TEXTURE_KEYS.PALADIN,
+  thief: TEXTURE_KEYS.THIEF,
+  priest: TEXTURE_KEYS.PRIEST,
   chicken: TEXTURE_KEYS.CHICKEN,
   // 進化型獨立紋理
   goblin_assassin: TEXTURE_KEYS.GOBLIN_ASSASSIN,
@@ -1218,6 +1572,14 @@ export const UNIT_TEXTURE_MAP: Record<string, string> = {
   skeleton_mage: TEXTURE_KEYS.SKELETON_MAGE,
   berserker_ogre: TEXTURE_KEYS.BERSERKER_OGRE,
   ironclad_ogre: TEXTURE_KEYS.IRONCLAD_OGRE,
+}
+
+export const TRAP_TEXTURE_MAP: Record<string, string> = {
+  spike_trap: TEXTURE_KEYS.ICON_TRAP,
+  slow_swamp: TEXTURE_KEYS.ICON_TRAP_SWAMP,
+  bouncer: TEXTURE_KEYS.ICON_TRAP_BOUNCER,
+  weaken_totem: TEXTURE_KEYS.ICON_TRAP_TOTEM,
+  alarm_bell: TEXTURE_KEYS.ICON_TRAP_ALARM,
 }
 
 // 進化型 tint 色差區分

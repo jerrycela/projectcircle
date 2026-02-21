@@ -44,6 +44,7 @@ const PANEL_PADDING = 12
 type ResultSubPhase =
   | 'summary'
   | 'evolution'
+  | 'defend_or_advance'
   | 'room_selection'
   | 'done'
 
@@ -313,6 +314,104 @@ export class ResultPhase implements Phase {
     this.summaryAdvanced = true
 
     this.clearGameObjects()
+    this.showDefendOrAdvance()
+  }
+
+  // ============ Defend or Advance Choice ============
+
+  private showDefendOrAdvance(): void {
+    this.subPhase = 'defend_or_advance'
+    this.clearGameObjects()
+
+    // Read crystal status
+    const run = gameStore.getState().run
+    const crystalStatus = run.crystalHP > 0
+      ? `水晶: ${run.crystalHP}/${run.crystalMaxHP}`
+      : '水晶已破壞'
+
+    // Title
+    const title = this.scene.add.text(
+      GAME_WIDTH / 2, RESULT_Y + 10,
+      '接下來...',
+      { fontSize: '14px', fontFamily: 'monospace', color: '#f0e8d8', fontStyle: 'bold' }
+    ).setOrigin(0.5)
+    this.gameObjects.push(title)
+
+    // Option 1: Continue defending
+    this.createChoiceButton(
+      GAME_WIDTH / 2, RESULT_Y + 60,
+      '繼續守衛',
+      '同一房間再打一場（+1波敵人）',
+      crystalStatus,
+      0x4488ff,
+      () => this.onChooseDefend()
+    )
+
+    // Option 2: Advance
+    this.createChoiceButton(
+      GAME_WIDTH / 2, RESULT_Y + 150,
+      '前往下一間',
+      '進化怪物、選房間獎勵、前進',
+      '',
+      0xffaa33,
+      () => this.onChooseAdvance()
+    )
+  }
+
+  private createChoiceButton(
+    x: number, y: number,
+    titleText: string, descText: string, extraText: string,
+    color: number, onClick: () => void
+  ): void {
+    const w = PANEL_WIDTH - 20
+    const h = 70
+
+    const bg = this.scene.add.rectangle(x, y, w, h, 0x221a30).setStrokeStyle(2, color)
+    bg.setInteractive({ useHandCursor: true })
+    this.gameObjects.push(bg)
+
+    const t = this.scene.add.text(x, y - 18, titleText, {
+      fontSize: '13px', fontFamily: 'monospace', color: '#' + color.toString(16).padStart(6, '0'),
+      fontStyle: 'bold'
+    }).setOrigin(0.5)
+    this.gameObjects.push(t)
+
+    const d = this.scene.add.text(x, y + 4, descText, {
+      fontSize: '9px', fontFamily: 'monospace', color: '#a8a0b8'
+    }).setOrigin(0.5)
+    this.gameObjects.push(d)
+
+    if (extraText) {
+      const e = this.scene.add.text(x, y + 20, extraText, {
+        fontSize: '8px', fontFamily: 'monospace', color: '#6688cc'
+      }).setOrigin(0.5)
+      this.gameObjects.push(e)
+    }
+
+    bg.on('pointerdown', onClick)
+
+    // Hover effect
+    bg.on('pointerover', () => bg.setFillStyle(0x2a2240))
+    bg.on('pointerout', () => bg.setFillStyle(0x221a30))
+  }
+
+  private onChooseDefend(): void {
+    this.clearGameObjects()
+    this.subPhase = 'done'
+
+    // Store extra wave count
+    const currentExtra = (this.scene.data.get('extraDefendWaves') as number) ?? 0
+    this.scene.data.set('extraDefendWaves', currentExtra + 1)
+
+    // Signal to go back to battle (not advance)
+    this.scene.events.emit('continue-defending')
+  }
+
+  private onChooseAdvance(): void {
+    this.clearGameObjects()
+    // Reset extra defend waves
+    this.scene.data.set('extraDefendWaves', 0)
+    // Normal flow: check evolution, then room selection
     this.checkEvolution()
   }
 

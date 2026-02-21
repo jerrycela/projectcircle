@@ -3,8 +3,9 @@ import type { Phase, PhaseExitOptions } from './phase-manager'
 import type { Direction } from '../systems/dungeon-grid'
 import { DungeonGrid } from '../systems/dungeon-grid'
 import { DataRegistry } from '../data/registry'
-import type { ConsumableDefinition } from '../data/schemas'
+import type { ConsumableDefinition, TrapDefinition } from '../data/schemas'
 import { gameStore } from '../state/game-store'
+import { buyTrap } from '../state/actions'
 import {
   GAME_WIDTH,
   ROOM_WIDTH,
@@ -43,6 +44,12 @@ const CONSUMABLE_CARD_WIDTH = 90
 const CONSUMABLE_CARD_HEIGHT = 70
 const CONSUMABLE_CARD_GAP = 8
 const CONSUMABLE_BAR_LABEL_HEIGHT = 18
+
+// 陷阱商店欄位配置（位於消耗品欄下方）
+const TRAP_BAR_Y = CONSUMABLE_BAR_Y + CONSUMABLE_BAR_LABEL_HEIGHT + CONSUMABLE_CARD_HEIGHT + 20
+const TRAP_CARD_WIDTH = 72
+const TRAP_CARD_HEIGHT = 70
+const TRAP_CARD_GAP = 6
 
 interface PurchasedConsumable {
   readonly id: string
@@ -517,6 +524,47 @@ export class ExplorePhase implements Phase {
       const cardY = CONSUMABLE_BAR_Y + CONSUMABLE_BAR_LABEL_HEIGHT
       this.createConsumableCard(def, cardX, cardY)
     }
+
+    this.drawTrapShopSection()
+  }
+
+  private drawTrapShopSection(): void {
+    const traps = DataRegistry.getAllTraps()
+    const totalWidth = traps.length * TRAP_CARD_WIDTH + (traps.length - 1) * TRAP_CARD_GAP
+    const startX = (GAME_WIDTH - totalWidth) / 2
+
+    // 陷阱商店標題（與「戰前準備」相同風格）
+    const trapLabel = this.scene.add.text(
+      GAME_WIDTH / 2,
+      TRAP_BAR_Y,
+      '陷阱商店',
+      { fontSize: '16px', color: '#a8a0b8', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2 },
+    )
+    trapLabel.setOrigin(0.5, 0)
+    this.uiElements.push(trapLabel)
+
+    const lineGfx = this.scene.add.graphics()
+    const lineY = TRAP_BAR_Y + 7
+    const lineLen = 30
+    const textHalfW = trapLabel.width / 2 + 6
+    lineGfx.lineStyle(1, UI_ACCENT, 0.5)
+    lineGfx.beginPath()
+    lineGfx.moveTo(GAME_WIDTH / 2 - textHalfW - lineLen, lineY)
+    lineGfx.lineTo(GAME_WIDTH / 2 - textHalfW, lineY)
+    lineGfx.strokePath()
+    lineGfx.beginPath()
+    lineGfx.moveTo(GAME_WIDTH / 2 + textHalfW, lineY)
+    lineGfx.lineTo(GAME_WIDTH / 2 + textHalfW + lineLen, lineY)
+    lineGfx.strokePath()
+    this.uiElements.push(lineGfx)
+
+    for (let i = 0; i < traps.length; i++) {
+      const def = traps[i]
+      const cardX = startX + i * (TRAP_CARD_WIDTH + TRAP_CARD_GAP)
+      const cardY = TRAP_BAR_Y + CONSUMABLE_BAR_LABEL_HEIGHT
+      this.createTrapCard(def, cardX, cardY)
+    }
   }
 
   private createConsumableCard(
@@ -641,6 +689,202 @@ export class ExplorePhase implements Phase {
         })
         this.purchaseConsumable(def)
       })
+    }
+  }
+
+  private createTrapCard(def: TrapDefinition, x: number, y: number): void {
+    const gold = gameStore.getState().run.gold
+    const inventory = gameStore.getState().run.trapInventory
+    const owned = inventory[def.id] ?? 0
+    const canAfford = gold >= def.cost
+    const isDisabled = !canAfford
+
+    // 卡片背景（半透明面板 — 與消耗品卡相同風格）
+    const bgGfx = this.scene.add.graphics()
+    drawPanel(bgGfx, x, y, TRAP_CARD_WIDTH, TRAP_CARD_HEIGHT, isDisabled ? 0.5 : 0.7)
+    this.uiElements.push(bgGfx)
+
+    // 可購買卡片底部脈動亮線
+    if (!isDisabled) {
+      const pulseLine = this.scene.add.graphics()
+      pulseLine.lineStyle(1, UI_ACCENT, 0.4)
+      pulseLine.beginPath()
+      pulseLine.moveTo(x + 4, y + TRAP_CARD_HEIGHT - 2)
+      pulseLine.lineTo(x + TRAP_CARD_WIDTH - 4, y + TRAP_CARD_HEIGHT - 2)
+      pulseLine.strokePath()
+      this.scene.tweens.add({
+        targets: pulseLine,
+        alpha: { from: 0.3, to: 1 },
+        duration: 1000,
+        yoyo: true,
+        repeat: -1,
+      })
+      this.uiElements.push(pulseLine)
+    }
+
+    // 點擊區域
+    const bg = this.scene.add.rectangle(
+      x + TRAP_CARD_WIDTH / 2,
+      y + TRAP_CARD_HEIGHT / 2,
+      TRAP_CARD_WIDTH,
+      TRAP_CARD_HEIGHT,
+      0x000000,
+      0,
+    )
+    this.uiElements.push(bg)
+
+    // 陷阱圖示（依類別繪製不同形狀）
+    const iconGfx = this.scene.add.graphics()
+    const iconX = x + TRAP_CARD_WIDTH / 2
+    const iconY = y + 14
+    this.drawTrapIcon(iconGfx, iconX, iconY, def)
+    this.uiElements.push(iconGfx)
+
+    // 名稱（ProjectDK 風格描邊文字）
+    const nameColor = isDisabled
+      ? `#${UI_TEXT_DIM.toString(16).padStart(6, '0')}`
+      : `#${UI_TEXT.toString(16).padStart(6, '0')}`
+    const nameText = this.scene.add.text(
+      x + TRAP_CARD_WIDTH / 2,
+      y + 26,
+      def.name,
+      { fontSize: '11px', color: nameColor, fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2 },
+    )
+    nameText.setOrigin(0.5)
+    this.uiElements.push(nameText)
+
+    // 價格（金色可負擔 / 紅色不夠金幣）
+    const costColor = canAfford ? '#FFD700' : '#FF4444'
+    const costText = this.scene.add.text(
+      x + TRAP_CARD_WIDTH / 2,
+      y + 41,
+      `${def.cost}g`,
+      { fontSize: '13px', color: costColor, fontFamily: 'monospace', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2 },
+    )
+    costText.setOrigin(0.5)
+    this.uiElements.push(costText)
+
+    // 庫存數量
+    const ownedText = this.scene.add.text(
+      x + TRAP_CARD_WIDTH / 2,
+      y + 56,
+      `持有：${owned}`,
+      { fontSize: '11px', color: '#88aacc',
+        stroke: '#000000', strokeThickness: 2 },
+    )
+    ownedText.setOrigin(0.5)
+    this.uiElements.push(ownedText)
+
+    // 互動（僅在可負擔時）
+    if (!isDisabled) {
+      bg.setInteractive({ useHandCursor: true })
+      bg.on('pointerover', () => {
+        bgGfx.clear()
+        drawPanel(bgGfx, x, y, TRAP_CARD_WIDTH, TRAP_CARD_HEIGHT, 0.9)
+      })
+      bg.on('pointerout', () => {
+        bgGfx.clear()
+        drawPanel(bgGfx, x, y, TRAP_CARD_WIDTH, TRAP_CARD_HEIGHT, 0.7)
+      })
+      bg.on('pointerup', () => {
+        // 購買閃光回饋
+        const purchaseFlash = this.scene.add.rectangle(
+          x + TRAP_CARD_WIDTH / 2,
+          y + TRAP_CARD_HEIGHT / 2,
+          TRAP_CARD_WIDTH,
+          TRAP_CARD_HEIGHT,
+          0xffffff,
+          0.25,
+        )
+        this.scene.tweens.add({
+          targets: purchaseFlash,
+          alpha: 0,
+          scaleX: 1.1,
+          scaleY: 1.1,
+          duration: 200,
+          onComplete: () => purchaseFlash.destroy(),
+        })
+        // 購買陷阱：扣除金幣、庫存 +1（不可變狀態更新）
+        gameStore.dispatchRunState(run => buyTrap(run, def.id, def.cost))
+        this.refreshConsumableBar()
+      })
+    }
+  }
+
+  /**
+   * 依陷阱類別繪製對應的圖示形狀
+   * spike_trap: 紅色三角形
+   * slow_swamp: 綠色圓形
+   * bouncer: 黃色菱形
+   * weaken_totem: 紫色圓形
+   * alarm_bell: 橙色圓形
+   */
+  private drawTrapIcon(
+    g: Phaser.GameObjects.Graphics,
+    cx: number,
+    cy: number,
+    def: TrapDefinition,
+  ): void {
+    switch (def.id) {
+      case 'spike_trap': {
+        // 紅色三角形（向上的尖刺形狀）
+        g.fillStyle(0xdd3333, 1)
+        g.beginPath()
+        g.moveTo(cx, cy - 7)
+        g.lineTo(cx + 7, cy + 5)
+        g.lineTo(cx - 7, cy + 5)
+        g.closePath()
+        g.fillPath()
+        g.lineStyle(1, 0xff6666, 0.8)
+        g.strokePath()
+        break
+      }
+      case 'slow_swamp': {
+        // 綠色圓形
+        g.fillStyle(0x33aa55, 0.9)
+        g.fillCircle(cx, cy, 7)
+        g.lineStyle(1, 0x55dd77, 0.8)
+        g.strokeCircle(cx, cy, 7)
+        break
+      }
+      case 'bouncer': {
+        // 黃色菱形
+        g.fillStyle(0xddcc22, 1)
+        g.beginPath()
+        g.moveTo(cx, cy - 7)
+        g.lineTo(cx + 7, cy)
+        g.lineTo(cx, cy + 7)
+        g.lineTo(cx - 7, cy)
+        g.closePath()
+        g.fillPath()
+        g.lineStyle(1, 0xffee66, 0.8)
+        g.strokePath()
+        break
+      }
+      case 'weaken_totem': {
+        // 紫色圓形
+        g.fillStyle(0x9933cc, 0.9)
+        g.fillCircle(cx, cy, 7)
+        g.lineStyle(1, 0xcc66ff, 0.8)
+        g.strokeCircle(cx, cy, 7)
+        break
+      }
+      case 'alarm_bell': {
+        // 橙色圓形
+        g.fillStyle(0xdd7722, 0.9)
+        g.fillCircle(cx, cy, 7)
+        g.lineStyle(1, 0xff9944, 0.8)
+        g.strokeCircle(cx, cy, 7)
+        break
+      }
+      default: {
+        // 未知類別：灰色圓形
+        g.fillStyle(0x888888, 0.9)
+        g.fillCircle(cx, cy, 7)
+        break
+      }
     }
   }
 
