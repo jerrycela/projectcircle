@@ -115,7 +115,7 @@ export class CombatSystem {
     const knockbackY = ny * GAME_CONFIG.KNOCKBACK_FORCE;
 
     // Deal damage to enemy
-    enemy.takeDamage(damage, knockbackX, knockbackY);
+    enemy.takeDamage(damage, knockbackX, knockbackY, player.x, player.y);
   }
 
   private spawnAttackArc(
