@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { Joystick } from '../ui/Joystick';
 import { HUD } from '../ui/HUD';
 import { UpgradePanel } from '../ui/UpgradePanel';
+import { EquipmentComparePanel } from '../ui/EquipmentComparePanel';
+import { EquipmentPanel } from '../ui/EquipmentPanel';
 import type { GameScene } from './GameScene';
 import EventBus from '../systems/EventBus';
 
@@ -9,6 +11,8 @@ export class UIScene extends Phaser.Scene {
   private joystick!: Joystick;
   private hud!: HUD;
   private upgradePanel!: UpgradePanel;
+  private equipmentComparePanel!: EquipmentComparePanel;
+  private equipmentPanel!: EquipmentPanel;
   private deathText?: Phaser.GameObjects.Text;
 
   constructor() {
@@ -20,6 +24,8 @@ export class UIScene extends Phaser.Scene {
     this.joystick = new Joystick(this);
     this.hud = new HUD(this);
     this.upgradePanel = new UpgradePanel(this);
+    this.equipmentComparePanel = new EquipmentComparePanel(this);
+    this.equipmentPanel = new EquipmentPanel(this);
 
     EventBus.on('altar-activated', () => {
       const gameScene = this.scene.get('GameScene') as GameScene;
