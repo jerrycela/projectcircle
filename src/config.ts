@@ -28,11 +28,6 @@ export const GAME_CONFIG = {
   KNOCKBACK_DURATION: 200,
 
   // Enemy (Floor 1 baseline)
-  SPIDER_HP: 50,
-  SPIDER_SPEED: 80,
-  SPIDER_ATTACK: 10,
-  SPIDER_ATTACK_COOLDOWN: 1500,
-  SPIDER_ATTACK_RANGE: 30,
   ENEMIES_PER_ROOM: { min: 3, max: 6 },
 
   // Loot
@@ -69,6 +64,148 @@ export interface UpgradeDefinition {
   costScale: number;
   maxLevel: number;
 }
+
+export interface EnemyConfig {
+  type: string;
+  textureKey: string;
+  size: number;
+  hp: number;
+  speed: number;
+  attack: number;
+  attackCooldown: number;
+  attackRange: number;
+  aiType: 'chase' | 'charge' | 'shield' | 'summon';
+  chargeConfig?: {
+    chargeSpeed: number;
+    windupMs: number;
+    stunMs: number;
+    maxDistance: number;
+    triggerRange: number;
+  };
+  summonConfig?: {
+    summonType: string;
+    summonInterval: number;
+    maxMinions: number;
+    windupMs: number;
+    cooldownMs: number;
+    retreatDistance: number;
+    minionHpScale: number;
+    minionAtkScale: number;
+  };
+  shieldConfig?: {
+    shieldArc: number;
+    damageReduction: number;
+    turnRate: number;
+  };
+  maxPerRoom?: number;
+  unlockFloor: number;
+  spawnWeight: number;
+}
+
+export const ENEMY_DEFS: Record<string, EnemyConfig> = {
+  spider: {
+    type: 'spider',
+    textureKey: 'enemy-spider',
+    size: 30,
+    hp: 50,
+    speed: 80,
+    attack: 10,
+    attackCooldown: 1500,
+    attackRange: 30,
+    aiType: 'chase',
+    unlockFloor: 1,
+    spawnWeight: 10,
+  },
+  goblin: {
+    type: 'goblin',
+    textureKey: 'enemy-goblin',
+    size: 28,
+    hp: 40,
+    speed: 72,
+    attack: 15,
+    attackCooldown: 1200,
+    attackRange: 35,
+    aiType: 'chase',
+    unlockFloor: 2,
+    spawnWeight: 8,
+  },
+  bat: {
+    type: 'bat',
+    textureKey: 'enemy-bat',
+    size: 24,
+    hp: 30,
+    speed: 60,
+    attack: 12,
+    attackCooldown: 0,
+    attackRange: 30,
+    aiType: 'charge',
+    chargeConfig: {
+      chargeSpeed: 280,
+      windupMs: 500,
+      stunMs: 800,
+      maxDistance: 400,
+      triggerRange: 200,
+    },
+    unlockFloor: 3,
+    spawnWeight: 5,
+  },
+  'skeleton-swordsman': {
+    type: 'skeleton-swordsman',
+    textureKey: 'enemy-skel-sword',
+    size: 32,
+    hp: 70,
+    speed: 65,
+    attack: 18,
+    attackCooldown: 1400,
+    attackRange: 35,
+    aiType: 'chase',
+    unlockFloor: 3,
+    spawnWeight: 6,
+  },
+  'skeleton-shieldbearer': {
+    type: 'skeleton-shieldbearer',
+    textureKey: 'enemy-skel-shield',
+    size: 34,
+    hp: 100,
+    speed: 50,
+    attack: 12,
+    attackCooldown: 1800,
+    attackRange: 30,
+    aiType: 'shield',
+    shieldConfig: {
+      shieldArc: 120,
+      damageReduction: 0.5,
+      turnRate: 180,
+    },
+    maxPerRoom: 2,
+    unlockFloor: 4,
+    spawnWeight: 4,
+  },
+  'skeleton-summoner': {
+    type: 'skeleton-summoner',
+    textureKey: 'enemy-skel-summoner',
+    size: 30,
+    hp: 60,
+    speed: 40,
+    attack: 8,
+    attackCooldown: 0,
+    attackRange: 0,
+    aiType: 'summon',
+    summonConfig: {
+      summonType: 'skeleton-swordsman',
+      summonInterval: 4000,
+      maxMinions: 3,
+      windupMs: 1000,
+      cooldownMs: 3000,
+      retreatDistance: 180,
+      minionHpScale: 0.5,
+      minionAtkScale: 0.5,
+    },
+    maxPerRoom: 1,
+    unlockFloor: 5,
+    spawnWeight: 3,
+  },
+};
 
 export const UPGRADE_DEFS: Record<string, UpgradeDefinition> = {
   attack: {
