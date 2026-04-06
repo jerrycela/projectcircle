@@ -12,9 +12,8 @@ export class CombatSystem {
   constructor(scene: GameScene) {
     this.scene = scene;
 
-    // Camera flash + shake on player hit
+    // Camera shake on player hit (no flash for normal attacks, reserved for skills)
     EventBus.on('player-hit', () => {
-      scene.cameras.main.flash(100, 255, 0, 0, false);
       scene.cameras.main.shake(120, 0.008);
     });
   }
@@ -180,7 +179,8 @@ export class CombatSystem {
   }
 
   private flashEnemy(enemy: Enemy): void {
-    enemy.setTint(0xffffff);
+    // Subtle red tint instead of full white flash (white flash reserved for skills)
+    enemy.setTint(0xff8888);
     this.scene.time.delayedCall(50, () => {
       if (enemy.active) {
         enemy.clearTint();
