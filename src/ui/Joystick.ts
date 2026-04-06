@@ -65,9 +65,10 @@ export class Joystick {
     }
     if (this.active) return;
 
-    // Only activate in bottom half of screen
+    // Only activate in bottom half AND left half (x < 225) to avoid skill button conflicts
     const gameHeight = this.scene.scale.height;
     if (pointer.y <= gameHeight / 2) return;
+    if (pointer.x >= 225) return;
 
     this.active = true;
     this.pointerId = pointer.id;

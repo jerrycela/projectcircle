@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
-import { UPGRADE_DEFS } from '../config';
-import type { UpgradeDefinition } from '../config';
+import { UPGRADE_DEFS, SKILL_DEFS } from '../config';
+import type { UpgradeDefinition, SkillDefinition } from '../config';
 import type { StatsManager, StatBlock } from '../systems/StatsManager';
 import type { Player } from '../entities/Player';
+import type { SkillManager } from '../systems/SkillManager';
 import EventBus from '../systems/EventBus';
 
 interface CardData {
@@ -12,12 +13,18 @@ interface CardData {
   level: number;
 }
 
+interface SkillCardData {
+  key: string;
+  def: SkillDefinition;
+}
+
 export class UpgradePanel {
   private scene: Phaser.Scene;
   private container: Phaser.GameObjects.Container;
   private visible: boolean = false;
   private statsManager!: StatsManager;
   private player!: Player;
+  private skillManager?: SkillManager;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -26,10 +33,11 @@ export class UpgradePanel {
     this.container.setVisible(false);
   }
 
-  show(statsManager: StatsManager, player: Player): void {
+  show(statsManager: StatsManager, player: Player, skillManager?: SkillManager): void {
     if (this.visible) return;
     this.statsManager = statsManager;
     this.player = player;
+    this.skillManager = skillManager;
     this.visible = true;
 
     // Clear previous content
@@ -54,11 +62,12 @@ export class UpgradePanel {
     title.setOrigin(0.5, 0.5);
     this.container.add(title);
 
-    // Generate 3 random upgrade cards
-    const cards = this.pickRandomUpgrades(3);
+    // Generate 3 random upgrade/skill cards from combined pool
+    const { upgradeCards, skillCards } = this.pickRandomOptions(3);
+    const totalCards = upgradeCards.length + skillCards.length;
 
-    // If no upgrades available (all maxed), close immediately
-    if (cards.length === 0) {
+    // If no options available, close immediately
+    if (totalCards === 0) {
       this.showFlash(width / 2, height / 2, 'All upgrades maxed!');
       this.scene.time.delayedCall(800, () => this.close());
       return;
@@ -69,13 +78,21 @@ export class UpgradePanel {
     const gap = 16;
     const startY = 180;
 
-    cards.forEach((card, i) => {
-      const cy = startY + i * (cardH + gap) + cardH / 2;
+    let cardIndex = 0;
+    upgradeCards.forEach((card) => {
+      const cy = startY + cardIndex * (cardH + gap) + cardH / 2;
       this.createCard(width / 2, cy, cardW, cardH, card);
+      cardIndex++;
+    });
+
+    skillCards.forEach((card) => {
+      const cy = startY + cardIndex * (cardH + gap) + cardH / 2;
+      this.createSkillCard(width / 2, cy, cardW, cardH, card);
+      cardIndex++;
     });
 
     // Skip button
-    const skipY = startY + cards.length * (cardH + gap) + 30;
+    const skipY = startY + totalCards * (cardH + gap) + 30;
     const skipBg = this.scene.add.rectangle(width / 2, skipY, 120, 40, 0x333333);
     skipBg.setStrokeStyle(1, 0x666666);
     skipBg.setInteractive({ useHandCursor: true });
@@ -113,23 +130,44 @@ export class UpgradePanel {
     EventBus.emit('altar-consumed');
   }
 
-  private pickRandomUpgrades(count: number): CardData[] {
-    const available: CardData[] = [];
+  private pickRandomOptions(count: number): { upgradeCards: CardData[]; skillCards: SkillCardData[] } {
+    const upgradePool: CardData[] = [];
+    const skillPool: SkillCardData[] = [];
 
+    // Stat upgrades
     for (const [key, def] of Object.entries(UPGRADE_DEFS)) {
       const level = this.statsManager.getLevel(key);
       if (level >= def.maxLevel) continue;
       const cost = def.baseCost + level * def.costScale;
-      available.push({ key, def, cost, level });
+      upgradePool.push({ key, def, cost, level });
     }
 
-    // Shuffle and take up to count
-    for (let i = available.length - 1; i > 0; i--) {
+    // Skills — only include if player has < 2 skills
+    const ownedSkillCount = this.skillManager?.getSkillCount() ?? 0;
+    if (ownedSkillCount < 2) {
+      for (const [key, def] of Object.entries(SKILL_DEFS)) {
+        // Skip already-owned skills
+        if (this.skillManager?.hasSkill(key)) continue;
+        skillPool.push({ key, def });
+      }
+    }
+
+    // Combine and shuffle
+    const combined: Array<{ isSkill: boolean; index: number }> = [
+      ...upgradePool.map((_, i) => ({ isSkill: false, index: i })),
+      ...skillPool.map((_, i) => ({ isSkill: true, index: i })),
+    ];
+
+    for (let i = combined.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [available[i], available[j]] = [available[j], available[i]];
+      [combined[i], combined[j]] = [combined[j], combined[i]];
     }
 
-    return available.slice(0, count);
+    const selected = combined.slice(0, count);
+    const selectedUpgrades = selected.filter(c => !c.isSkill).map(c => upgradePool[c.index]);
+    const selectedSkills = selected.filter(c => c.isSkill).map(c => skillPool[c.index]);
+
+    return { upgradeCards: selectedUpgrades, skillCards: selectedSkills };
   }
 
   private createCard(
@@ -193,6 +231,78 @@ export class UpgradePanel {
       cardBg.on('pointerover', () => cardBg.setFillStyle(0x333333));
       cardBg.on('pointerout', () => cardBg.setFillStyle(0x222222));
     }
+  }
+
+  private createSkillCard(
+    cx: number, cy: number,
+    w: number, h: number,
+    card: SkillCardData,
+  ): void {
+    // Skill cards are always free — no gold cost
+    const cardBg = this.scene.add.rectangle(cx, cy, w, h, 0x1a1a33, 1.0);
+    cardBg.setStrokeStyle(2, 0x9933ff);
+    cardBg.setInteractive({ useHandCursor: true });
+    this.container.add(cardBg);
+
+    // "SKILL" badge top-right
+    const badgeText = this.scene.add.text(cx + w / 2 - 12, cy - h / 2 + 8, 'SKILL', {
+      fontSize: '10px',
+      color: '#cc66ff',
+      fontFamily: 'monospace',
+    });
+    badgeText.setOrigin(1, 0);
+    this.container.add(badgeText);
+
+    // Name
+    const nameText = this.scene.add.text(cx - w / 2 + 20, cy - 42, card.def.name, {
+      fontSize: '20px',
+      color: '#cc66ff',
+      fontFamily: 'monospace',
+    });
+    this.container.add(nameText);
+
+    // Description
+    const descText = this.scene.add.text(cx - w / 2 + 20, cy - 12, card.def.description, {
+      fontSize: '13px',
+      color: '#aaaacc',
+      fontFamily: 'monospace',
+    });
+    this.container.add(descText);
+
+    // MP cost + cooldown line
+    const cdSec = (card.def.cooldownMs / 1000).toFixed(0);
+    const statsLine = `MP: ${card.def.mpCost} | CD: ${cdSec}s`;
+    const statsText = this.scene.add.text(cx - w / 2 + 20, cy + 14, statsLine, {
+      fontSize: '12px',
+      color: '#7777aa',
+      fontFamily: 'monospace',
+    });
+    this.container.add(statsText);
+
+    // "FREE" label (no gold cost)
+    const freeText = this.scene.add.text(cx + w / 2 - 20, cy + 40, 'FREE', {
+      fontSize: '16px',
+      color: '#cc66ff',
+      fontFamily: 'monospace',
+    });
+    freeText.setOrigin(1, 0.5);
+    this.container.add(freeText);
+
+    // Click handler
+    cardBg.on('pointerdown', () => {
+      this.acquireSkill(card, cx, cy);
+    });
+
+    // Hover
+    cardBg.on('pointerover', () => cardBg.setFillStyle(0x2a2a44));
+    cardBg.on('pointerout', () => cardBg.setFillStyle(0x1a1a33));
+  }
+
+  private acquireSkill(card: SkillCardData, cx: number, cy: number): void {
+    // Emit skill-acquired event — GameScene handles addSkill()
+    EventBus.emit('skill-acquired', card.key);
+    this.showFlash(cx, cy - 60, `${card.def.name} acquired!`);
+    this.scene.time.delayedCall(400, () => this.close());
   }
 
   private purchaseUpgrade(card: CardData, cx: number, cy: number): void {
