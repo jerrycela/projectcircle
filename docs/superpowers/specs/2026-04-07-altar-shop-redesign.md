@@ -23,7 +23,7 @@ Player approaches altar (60px range)
   → Subsequent visits:
       → Directly open upgrade shop
   → Shop: free browsing, buy any affordable upgrade, press X to close
-  → Altar remains active (returns to IDLE state)
+  → Altar enters COOLDOWN (transitions to IDLE when player leaves range)
 ```
 
 ## Altar State Machine Changes
@@ -41,31 +41,53 @@ New states: IDLE → IN_RANGE → ARMING → OPEN → COOLDOWN → IDLE
 ### Event Contract
 
 - `altar-activated`: emitted by Altar when ARMING timer completes. Payload: altar instance reference.
-- `altar-session-closed`: emitted by UpgradePanel when shop is closed (X button). Altar listens and transitions OPEN → COOLDOWN.
+- `altar-session-closed`: emitted by UpgradePanel when shop is closed (X button) or by any teardown path. Payload: `{ altar: Altar, reason: 'close-button' | 'teardown' | 'debug' }`. Altar listens and transitions OPEN → COOLDOWN.
 - `ui-input-lock` / `ui-input-unlock` + `gameplay-lock`: single lock acquired at session start (skill phase or shop), released only when shop closes. Phase transition (skill → shop) does NOT unlock/resume — continuous single lock throughout entire altar session.
+- **Invariant**: any altar session end path (normal close, scene shutdown, debug force-close) MUST emit `altar-session-closed` and release the single lock. UpgradePanel's `destroy()` method must call cleanup if session is active.
+- Stat changes are applied via `StatsManager.addBonus()` / `StatsManager.incrementLevel()`. StatsManager is responsible for emitting any stat-changed events — UpgradePanel does not emit stat events directly.
 
 ## Skill Pick Panel
 
 - 3 random skill cards, pick 1
 - 2 skill slots; if full: picking owned skill = upgrade, new skill = replace (slot selection UI)
-- 1 free reroll, subsequent rerolls cost gold
+- 1 free reroll, subsequent rerolls cost 20G flat (not escalating). Reroll button disabled + dimmed if gold < 20.
+- Rerolled cards are drawn from remaining pool; duplicates with current 3 cards are allowed (pool is small).
 - Skip button available (skips skill phase, proceeds to shop)
 - Only appears on first altar activation per floor (gated by `skillOffered` flag)
 - After selection/skip, auto-transitions to upgrade shop (instant cut, no animation)
-- If skill pool is empty (all skills learned + maxed), skip skill phase entirely, go straight to shop
+- If skill pool is empty (all skills learned at max level), skip skill phase entirely, go straight to shop
+
+### Skill Level System
+
+Add `level: number` to SkillSlot (default 1 when learned). Each skill has max level 3.
+
+| Skill | Lv1 | Lv2 | Lv3 |
+|-------|-----|-----|-----|
+| Whirlwind | 1.5x dmg, r=100 | 1.8x dmg, r=110 | 2.1x dmg, r=120 |
+| Shadow Dash | 0.8x dmg, d=150 | 1.0x dmg, d=170 | 1.2x dmg, d=190 |
+| Arcane Bolt | 2.0x dmg, pierce=2 | 2.4x dmg, pierce=3 | 2.8x dmg, pierce=4 |
+
+Scaling rule: `damageMultiplier += 0.3 per level` for Whirlwind/Arcane Bolt, `+0.2` for Shadow Dash. Secondary stat (radius/distance/pierce) increases by fixed amount per level as shown.
+
+Implementation: add `levelScaling` array to `SkillDefinition` in config.ts. `SkillSlot` gains `level: number`. `SkillManager.upgradeSkill(type)` increments level (capped at 3). `calcSkillDamage` and `executeSkill` read current level to pick multiplier/params.
+
+Skill card in altar UI shows current level if owned: "Whirlwind Lv.1 → Lv.2".
 
 ### Skill Phase Flow Detail
 
 ```
 Skill panel opens (3 random cards)
-  ├─ Select owned skill → upgrade it → skillOffered=true → shop
-  ├─ Select new skill (slots available) → learn it → skillOffered=true → shop
+  ├─ Select owned skill (level < max) → upgrade it → skillOffered=true → shop
+  ├─ Select owned skill (level = max) → not possible (maxed skills excluded from pool)
+  ├─ Select new skill (slots available) → learn it at Lv.1 → skillOffered=true → shop
   ├─ Select new skill (slots full) → slot selection modal
-  │     ├─ Pick slot to replace → replace → skillOffered=true → shop
+  │     ├─ Pick slot to replace → replace (new at Lv.1) → skillOffered=true → shop
   │     └─ Cancel → return to skill panel (same 3 cards, can re-pick)
-  ├─ Reroll (free 1st, paid after) → new 3 cards → same flow
+  ├─ Reroll (free 1st, then 20G) → new 3 cards → same flow
   └─ Skip → skillOffered=true → shop
 ```
+
+Skill pool for card draw: all skills where either (a) player doesn't own it, or (b) player owns it at level < max. Maxed skills are excluded.
 
 ## Upgrade Shop UI
 
@@ -123,7 +145,7 @@ Each cell displays:
 ### Close Button
 
 - X button bottom-right corner
-- Closes shop, unlocks input, altar returns to IDLE
+- Closes shop, emits `altar-session-closed`, unlocks input, altar transitions OPEN → COOLDOWN
 
 ## Stat Upgrade Definitions (Unchanged)
 
@@ -140,13 +162,14 @@ Cost formula: `baseCost + currentLevel × costScale`
 
 ## Files to Modify
 
-1. **Altar.ts** — Remove CONSUMED state, add `skillOffered` flag, cycle back to IDLE on close
-2. **UpgradePanel.ts** — Major rewrite: split into two phases (skill pick + shop grid), new grid layout
-3. **config.ts** — No changes (upgrade definitions unchanged)
-4. **StatsManager.ts** — No changes (level tracking already supports this)
-5. **GameScene.ts** — Update altar-activated handler for two-phase flow
-6. **UIScene.ts** — Update panel mounting if needed
-7. **DebugManager.ts** — Add debug commands for new altar flow (e.g., reset skillOffered)
+1. **Altar.ts** — Replace CONSUMED with COOLDOWN, add `skillOffered` flag, COOLDOWN→IDLE on leave range
+2. **UpgradePanel.ts** — Major rewrite: two-phase flow (skill pick + shop grid), new grid layout, destroy cleanup
+3. **config.ts** — Add `levelScaling` to SkillDefinition, add reroll cost constant
+4. **SkillManager.ts** — Add `level` to SkillSlot, add `upgradeSkill()`, update `calcSkillDamage`/`executeSkill` for level scaling, update `exportState`/`importState`
+5. **StatsManager.ts** — No changes (level tracking already supports this)
+6. **GameScene.ts** — Update altar-activated handler for two-phase flow
+7. **UIScene.ts** — Update panel mounting if needed
+8. **DebugManager.ts** — Add debug commands: `resetSkillOffered()`, `openShop()`, `setSkillLevel(type, level)`
 
 ## Edge Cases
 
@@ -156,29 +179,36 @@ Cost formula: `baseCost + currentLevel × costScale`
 | 0 gold, first visit | Skill phase runs normally (skills are free). Then shop opens with all cells dimmed. |
 | 0 gold, subsequent visit | Shop opens with all cells dimmed. Player can browse and close. |
 | Skill pool empty (first visit) | Skip skill phase, go straight to shop. `skillOffered` set to true. |
-| Player has 2 skills, all maxed (first visit) | Skill panel shows 3 cards. Selecting owned = upgrade. Selecting new = replace slot. |
+| Player has 2 skills at max level (first visit) | All owned skills excluded from pool (maxed). Only unowned skills appear. If no unowned skills either → pool empty → skip to shop. |
+| Session interrupted (scene shutdown) | UpgradePanel.destroy() emits `altar-session-closed` with reason `teardown`, releases lock. |
+| Reroll with insufficient gold | Reroll button disabled + dimmed. Click does nothing. |
 
 ## Acceptance Criteria
 
-1. Approaching altar and stopping for 500ms opens the altar session
-2. First visit per floor: skill three-choose-one appears before shop
-3. Subsequent visits: shop opens directly (no skill phase)
-4. Shop displays all 6 upgrades in 3x2 grid with correct level/cost/bonus
-5. Clicking affordable cell purchases upgrade, deducts gold, updates cell immediately
-6. Clicking unaffordable cell shows "Not enough gold" flash
-7. MAX level cells are visually distinct and non-interactive
-8. Gold display updates in real-time after each purchase
-9. X button closes shop and unlocks input
-10. After closing shop, altar does NOT re-trigger while player stands still in range
-11. After player walks away and returns, altar can be activated again
-12. Skill→shop transition maintains input lock throughout (no flicker)
-13. `skillOffered` flag persists correctly — only one skill phase per floor
-14. Slot replacement cancel returns to skill panel, does not skip to shop
-15. DebugManager has commands to test altar flow (reset skillOffered, open shop directly)
+| AC | Description | Verification |
+|----|-------------|-------------|
+| 1 | Approaching altar and stopping 500ms opens session | Walk to altar, stop, observe panel opens |
+| 2 | First visit: skill pick appears before shop | `__debug.teleportToRoom(altarRoom)`, approach altar, verify skill panel first |
+| 3 | Subsequent visits: shop opens directly | Close shop, walk away, return → verify no skill panel |
+| 4 | Shop displays 6 upgrades in 3x2 grid | `__debug.giveGold(9999)`, open shop, verify all 6 cells visible with correct data |
+| 5 | Purchase deducts gold, updates cell | Buy Attack+, verify gold decreased by cost, cell shows Lv+1 and new price |
+| 6 | Unaffordable cell shows flash text | Set gold to 0 via `__debug.giveGold(-9999)`, click cell, verify flash |
+| 7 | MAX cells visually distinct, non-interactive | `__debug` max out a stat, verify cell shows MAX, click does nothing |
+| 8 | Gold display updates in real-time | Buy 3 items in succession, verify gold label updates each time |
+| 9 | X closes shop, unlocks input | Click X, verify joystick/movement works immediately |
+| 10 | No re-trigger while standing still | Close shop, do NOT move, wait 2s → altar must not reopen |
+| 11 | Re-activatable after leaving range | Close shop, walk away (>60px), return, stop → altar reopens |
+| 12 | Skill→shop lock continuous | Open altar first time, observe no input flicker during transition |
+| 13 | skillOffered persists per floor | First visit select skill → close → reopen → verify no skill panel |
+| 14 | Slot replace cancel returns to skill panel | With 2 skills, pick new skill → cancel replace → verify back at same 3 cards |
+| 15 | Debug commands work | `__debug.resetSkillOffered()` → reopen altar → skill panel appears again |
+| 16 | Skill upgrade works | Own whirlwind Lv1, pick whirlwind from altar → verify Lv2, damage increased |
+| 17 | Reroll costs 20G after first free | Use free reroll (new cards), then verify 20G deducted on second reroll |
+| 18 | Session cleanup on teardown | Force scene restart during open panel → verify no stuck lock state |
 
 ## Out of Scope
 
-- New upgrade types
-- Changing skill system mechanics
+- New upgrade types or new skills
 - Visual asset changes (still using Graphics API placeholders)
 - Sound effects
+- Skill rebalancing beyond level scaling defined above
