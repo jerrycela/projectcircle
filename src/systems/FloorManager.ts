@@ -1,4 +1,5 @@
-import { GAME_CONFIG } from '../config';
+import { GAME_CONFIG, ENEMY_DEFS } from '../config';
+import type { EnemyConfig } from '../config';
 
 export interface FloorConfig {
   roomCount: { min: number; max: number };
@@ -49,6 +50,20 @@ export class FloorManager {
 
   resetToFloor1(): void {
     this.currentFloor = 1;
+  }
+
+  getSpawnTable(): { config: EnemyConfig; weight: number }[] {
+    const table: { config: EnemyConfig; weight: number }[] = [];
+    for (const config of Object.values(ENEMY_DEFS)) {
+      if (config.unlockFloor <= this.currentFloor) {
+        let weight = config.spawnWeight;
+        if (config.unlockFloor === this.currentFloor) {
+          weight = Math.round(weight * 1.5);
+        }
+        table.push({ config, weight });
+      }
+    }
+    return table;
   }
 
   exportState(): FloorState {
