@@ -54,10 +54,9 @@ export class Joystick {
     }
     if (this.active) return;
 
-    // Only activate in bottom-left quadrant
-    const gameWidth = this.scene.scale.width;
+    // Only activate in bottom half of screen
     const gameHeight = this.scene.scale.height;
-    if (pointer.x >= gameWidth / 2 || pointer.y <= gameHeight / 2) return;
+    if (pointer.y <= gameHeight / 2) return;
 
     this.active = true;
     this.pointerId = pointer.id;

@@ -1,7 +1,7 @@
 export const GAME_CONFIG = {
-  // Display
-  GAME_WIDTH: 800,
-  GAME_HEIGHT: 600,
+  // Display (portrait — like Rumble Raiders)
+  GAME_WIDTH: 450,
+  GAME_HEIGHT: 800,
 
   // Map
   TILE_SIZE: 64,
