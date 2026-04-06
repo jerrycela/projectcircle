@@ -207,6 +207,60 @@ export const ENEMY_DEFS: Record<string, EnemyConfig> = {
   },
 };
 
+export interface SkillDefinition {
+  type: string;
+  name: string;
+  description: string;
+  mpCost: number;
+  cooldownMs: number;
+  castDurationMs: number;
+  damageMultiplier: number;
+  radius?: number;
+  dashDistance?: number;
+  dashDurationMs?: number;
+  dashPathWidth?: number;
+  projectileSpeed?: number;
+  projectileRange?: number;
+  pierceCount?: number;
+}
+
+export const SKILL_DEFS: Record<string, SkillDefinition> = {
+  whirlwind: {
+    type: 'whirlwind',
+    name: 'Whirlwind',
+    description: 'AOE slash hitting all nearby enemies',
+    mpCost: 25,
+    cooldownMs: 4000,
+    castDurationMs: 300,
+    damageMultiplier: 1.5,
+    radius: 100,
+  },
+  'shadow-dash': {
+    type: 'shadow-dash',
+    name: 'Shadow Dash',
+    description: 'Dash forward, damaging enemies in path',
+    mpCost: 20,
+    cooldownMs: 3000,
+    castDurationMs: 200,
+    damageMultiplier: 0.8,
+    dashDistance: 150,
+    dashDurationMs: 200,
+    dashPathWidth: 32,
+  },
+  'arcane-bolt': {
+    type: 'arcane-bolt',
+    name: 'Arcane Bolt',
+    description: 'Fires a piercing magical projectile',
+    mpCost: 30,
+    cooldownMs: 5000,
+    castDurationMs: 100,
+    damageMultiplier: 2.0,
+    projectileSpeed: 350,
+    projectileRange: 300,
+    pierceCount: 2,
+  },
+};
+
 export const UPGRADE_DEFS: Record<string, UpgradeDefinition> = {
   attack: {
     name: 'Attack+',

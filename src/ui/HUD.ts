@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
+import { SKILL_DEFS } from '../config';
 import type { GameScene } from '../scenes/GameScene';
+import { SkillButton } from './SkillButton';
 
 const HP_BAR_W = 200;
 const HP_BAR_H = 20;
@@ -37,6 +39,10 @@ export class HUD {
 
   // Floor label
   private floorText: Phaser.GameObjects.Text;
+
+  // Skill buttons
+  private skillButton0: SkillButton;
+  private skillButton1: SkillButton;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -91,6 +97,10 @@ export class HUD {
     );
     this.materialsText.setOrigin(1, 0);
     this.materialsText.setDepth(11);
+
+    // Skill buttons — right side of screen
+    this.skillButton0 = new SkillButton(scene, 390, 620, 0);
+    this.skillButton1 = new SkillButton(scene, 390, 720, 1);
   }
 
   /** Call every frame from UIScene.update() */
@@ -116,6 +126,25 @@ export class HUD {
     this.materialsText.setText(`W:${m.wood} O:${m.ore} C:${m.cloth}`);
 
     this.drawBars();
+
+    // Update skill buttons
+    if (gameScene.skillManager) {
+      const sm = gameScene.skillManager;
+      for (let i = 0; i < 2; i++) {
+        const type = sm.getSlotType(i);
+        const state = sm.getSlotState(i);
+        const cooldownRatio = sm.getSlotCooldownRatio(i);
+        const mpEnough = type
+          ? (SKILL_DEFS[type] ? p.mp >= SKILL_DEFS[type].mpCost : true)
+          : true;
+
+        if (i === 0) {
+          this.skillButton0.update(type, state, cooldownRatio, mpEnough);
+        } else {
+          this.skillButton1.update(type, state, cooldownRatio, mpEnough);
+        }
+      }
+    }
   }
 
   private drawBars(): void {

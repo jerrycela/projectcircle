@@ -16,6 +16,7 @@ import { Altar } from '../entities/Altar';
 import { FloorManager } from '../systems/FloorManager';
 import type { FloorState } from '../systems/FloorManager';
 import { Staircase } from '../entities/Staircase';
+import { SkillManager } from '../systems/SkillManager';
 
 export interface RunState {
   statsManagerState: { bonuses: StatBlock; levels: Record<string, number> };
@@ -24,6 +25,7 @@ export interface RunState {
   playerGold: number;
   playerMaterials: { wood: number; ore: number; cloth: number };
   floorManagerState: FloorState;
+  playerSkills?: string[];
 }
 
 export class GameScene extends Phaser.Scene {
@@ -31,6 +33,7 @@ export class GameScene extends Phaser.Scene {
   public combatSystem!: CombatSystem;
   public lootSystem!: LootSystem;
   public statsManager!: StatsManager;
+  public skillManager!: SkillManager;
   public gameplayLocked: boolean = false;
   private recoveryAccum: number = 0;
 
@@ -39,6 +42,7 @@ export class GameScene extends Phaser.Scene {
   public wallGroup!: Phaser.Physics.Arcade.StaticGroup;
   public player!: Player;
   public enemyGroup!: Phaser.Physics.Arcade.Group;
+  public projectileGroup!: Phaser.Physics.Arcade.Group;
   public lootGroup!: Phaser.GameObjects.Group;
   public currentPlayerRoom: number | null = null;
   private altar?: Altar;
@@ -194,11 +198,30 @@ export class GameScene extends Phaser.Scene {
     this.lootGroup = this.add.group();
     this.lootSystem = new LootSystem(this, this.player, this.lootGroup);
 
-    // Combat system
-    this.combatSystem = new CombatSystem(this, this.statsManager);
+    // Projectile group (for arcane bolt, etc.)
+    this.projectileGroup = this.physics.add.group();
+
+    // Skill manager
+    this.skillManager = new SkillManager(this);
+    if (this.runState?.playerSkills) {
+      this.skillManager.importState({ skills: this.runState.playerSkills });
+    }
+
+    // Combat system — receives skill manager reference
+    this.combatSystem = new CombatSystem(this, this.statsManager, this.skillManager);
 
     EventBus.on('altar-consumed', () => {
       this.altar?.consume();
+    });
+
+    // Skill cast requests from UIScene (skill button taps)
+    EventBus.on('skill-cast-request', (slotIndex: number) => {
+      this.skillManager.cast(slotIndex);
+    });
+
+    // Skill acquisition from altar
+    EventBus.on('skill-acquired', (type: string) => {
+      this.skillManager.addSkill(type);
     });
 
     // Player death handler
@@ -243,12 +266,18 @@ export class GameScene extends Phaser.Scene {
   private onShutdown(): void {
     this.combatSystem?.destroy();
     this.lootSystem?.destroy();
+    // Destroy all projectiles to prevent orphaned physics bodies
+    if (this.projectileGroup) {
+      this.projectileGroup.clear(true, true);
+    }
     EventBus.off('joystick-move');
     EventBus.off('joystick-stop');
     EventBus.off('player-died');
     EventBus.off('gameplay-lock');
     EventBus.off('altar-consumed');
     EventBus.off('floor-cleared');
+    EventBus.off('skill-cast-request');
+    EventBus.off('skill-acquired');
   }
 
   update(time: number, delta: number): void {
@@ -279,6 +308,7 @@ export class GameScene extends Phaser.Scene {
     this.detectPlayerRoom();
     this.updateEnemyAI();
     this.checkRoomClearing();
+    this.skillManager.update(delta);
     this.combatSystem.update(time, delta);
     this.lootSystem.update();
     this.altar?.update(time, delta);
@@ -458,6 +488,7 @@ export class GameScene extends Phaser.Scene {
           this.floorManager.advanceFloor();
           return this.floorManager.exportState();
         })(),
+        playerSkills: this.skillManager.exportState().skills,
       };
       this.scene.restart(runState);
     });
@@ -480,6 +511,8 @@ export class GameScene extends Phaser.Scene {
           currentFloor: 1,
           highestFloor: this.floorManager.highestFloor,
         },
+        // Skills persist on death (same as upgrades)
+        playerSkills: this.skillManager.exportState().skills,
       };
       this.scene.restart(runState);
     });

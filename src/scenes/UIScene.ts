@@ -24,8 +24,13 @@ export class UIScene extends Phaser.Scene {
     EventBus.on('altar-activated', () => {
       const gameScene = this.scene.get('GameScene') as GameScene;
       if (gameScene?.statsManager && gameScene?.player) {
-        this.upgradePanel.show(gameScene.statsManager, gameScene.player);
+        this.upgradePanel.show(gameScene.statsManager, gameScene.player, gameScene.skillManager);
       }
+    });
+
+    // Forward skill button taps to GameScene
+    EventBus.on('skill-button-pressed', (slotIndex: number) => {
+      EventBus.emit('skill-cast-request', slotIndex);
     });
 
     EventBus.on('show-death-text', (floor: number) => {
