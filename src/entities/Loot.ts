@@ -72,7 +72,7 @@ export class Loot extends Phaser.GameObjects.Image {
   }
 
   collect(): void {
-    this.bobTween?.stop();
+    this.bobTween?.destroy();
     this.bobTween = undefined;
     this.setActive(false);
     this.setVisible(false);

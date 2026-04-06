@@ -18,6 +18,10 @@ export class CombatSystem {
     });
   }
 
+  destroy(): void {
+    EventBus.off('player-hit');
+  }
+
   update(time: number, _delta: number): void {
     // Throttle scan to every ATTACK_SCAN_INTERVAL ms
     if (time - this.lastScanTime < GAME_CONFIG.ATTACK_SCAN_INTERVAL) return;
@@ -122,6 +126,7 @@ export class CombatSystem {
     arc.arc(0, 0, 30, angle - 0.7, angle + 0.7, false);
     arc.strokePath();
     arc.setPosition(midX, midY);
+    arc.setDepth(50);
 
     // Fade out over 150ms then destroy
     this.scene.tweens.add({

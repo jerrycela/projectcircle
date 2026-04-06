@@ -79,6 +79,7 @@ export class LootSystem {
     const existing = this.lootGroup.getFirstDead(false) as Loot | null;
 
     if (existing) {
+      this.scene.tweens.killTweensOf(existing);
       existing.lootType = type;
       existing.value = value;
       existing.rarity = rarity;
@@ -130,18 +131,18 @@ export class LootSystem {
       if (dist < range) {
         this.pulling.add(loot);
 
-        this.scene.tweens.add({
+        const magnetTween = this.scene.tweens.add({
           targets: loot,
           x: px,
           y: py,
           duration: 200,
           ease: 'Cubic.easeIn',
           onUpdate: () => {
-            // Check if player moved significantly — re-target
             const cdx = this.player.x - loot.x;
             const cdy = this.player.y - loot.y;
             if (Math.sqrt(cdx * cdx + cdy * cdy) < 10) {
               this.collectLoot(loot);
+              magnetTween.stop();
             }
           },
           onComplete: () => {

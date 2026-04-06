@@ -37,7 +37,21 @@ export class Joystick {
     scene.input.on('pointerupoutside', this.onPointerUp, this);
   }
 
+  private resetJoystick(): void {
+    this.active = false;
+    this.pointerId = -1;
+    this.dirX = 0;
+    this.dirY = 0;
+    this.base.setVisible(false);
+    this.thumb.setVisible(false);
+    EventBus.emit('joystick-stop');
+  }
+
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
+    // Reset stale state — if a pointerup was missed, allow new activation
+    if (this.active && this.pointerId !== pointer.id) {
+      this.resetJoystick();
+    }
     if (this.active) return;
 
     // Only activate in bottom-left quadrant
@@ -88,15 +102,6 @@ export class Joystick {
 
   private onPointerUp(pointer: Phaser.Input.Pointer): void {
     if (!this.active || pointer.id !== this.pointerId) return;
-
-    this.active = false;
-    this.pointerId = -1;
-    this.dirX = 0;
-    this.dirY = 0;
-
-    this.base.setVisible(false);
-    this.thumb.setVisible(false);
-
-    EventBus.emit('joystick-stop');
+    this.resetJoystick();
   }
 }

@@ -136,18 +136,21 @@ export class GameScene extends Phaser.Scene {
       this.combatSystem.onPlayerDied();
     });
 
+    // Register shutdown handler so Phaser calls it on scene stop
+    this.events.on('shutdown', this.onShutdown, this);
+
     const params = new URLSearchParams(window.location.search);
     if (params.get('debug') === '1') {
       this.debugManager = new DebugManager(this);
     }
   }
 
-  shutdown(): void {
+  private onShutdown(): void {
+    this.combatSystem?.destroy();
     this.lootSystem?.destroy();
     EventBus.off('joystick-move');
     EventBus.off('joystick-stop');
     EventBus.off('player-died');
-    EventBus.off('player-hit');
   }
 
   update(time: number, delta: number): void {

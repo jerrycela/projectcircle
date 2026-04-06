@@ -87,8 +87,7 @@ export class Player extends Phaser.GameObjects.Container {
     if (this.invincible) return;
     if (!this.active) return;
 
-    this.hp -= amount;
-    if (this.hp < 0) this.hp = 0;
+    this.hp = Math.max(0, this.hp - amount);
 
     // Camera flash red to signal damage
     EventBus.emit('player-hit');
