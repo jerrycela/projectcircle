@@ -92,8 +92,8 @@ interface RunState {
 **Why scene restart over in-scene rebuild:** Phaser's `scene.restart()` handles cleanup of display objects, physics bodies, tweens, and timers automatically. Manual teardown is error-prone with the current EventBus singleton pattern.
 
 **EventBus cleanup:** CombatSystem, Altar, and other systems bind listeners via `EventBus.on()` but never call `off()`. Add cleanup:
-- GameScene `shutdown` event handler: call `EventBus.removeAllListeners()` before restart.
-- This is safe because UIScene re-binds its own listeners independently.
+- GameScene `shutdown` event handler: remove only GameScene's own listeners (`joystick-move`, `joystick-stop`, `player-died`, `gameplay-lock`, `altar-consumed`, `floor-cleared`).
+- Do NOT use `removeAllListeners()` — UIScene runs parallel and its listeners must survive GameScene restarts.
 
 ### 3. Staircase Entity (`src/entities/Staircase.ts`)
 

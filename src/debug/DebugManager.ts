@@ -18,6 +18,10 @@ interface GameState {
     gold: number;
     materials: { wood: number; ore: number; cloth: number };
     attack: { min: number; max: number };
+    armor: number;
+    recovery: number;
+    critDamage: number;
+    moveSpeed: number;
     speed: number;
     currentRoom: number | null;
   };
@@ -219,7 +223,14 @@ export class DebugManager {
         maxMp: player ? player.maxMp : 0,
         gold: player ? player.gold : 0,
         materials: player ? { ...player.materials } : { wood: 0, ore: 0, cloth: 0 },
-        attack: { min: GAME_CONFIG.PLAYER_ATTACK.min, max: GAME_CONFIG.PLAYER_ATTACK.max },
+        attack: {
+          min: this.scene.statsManager.getStat('attackMin'),
+          max: this.scene.statsManager.getStat('attackMax'),
+        },
+        armor: this.scene.statsManager.getStat('armor'),
+        recovery: this.scene.statsManager.getStat('recovery'),
+        critDamage: this.scene.statsManager.getStat('critDamage'),
+        moveSpeed: this.scene.statsManager.getStat('moveSpeed'),
         speed: player ? player.speed : 0,
         currentRoom: this.scene.currentPlayerRoom ?? null,
       },
