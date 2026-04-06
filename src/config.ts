@@ -47,6 +47,8 @@ export const GAME_CONFIG = {
   ALTAR_ACTIVATE_RANGE: 60,
   ALTAR_ARM_DELAY: 500,
   ALTAR_SIZE: 48,
+  ALTAR_REROLL_COST: 20,
+  SKILL_MAX_LEVEL: 3,
 
   // Recovery (HP regen)
   PLAYER_RECOVERY: 0, // base recovery (0 = none until upgraded)
@@ -207,6 +209,13 @@ export const ENEMY_DEFS: Record<string, EnemyConfig> = {
   },
 };
 
+export interface SkillLevelData {
+  damageMultiplier: number;
+  radius?: number;
+  dashDistance?: number;
+  pierceCount?: number;
+}
+
 export interface SkillDefinition {
   type: string;
   name: string;
@@ -222,6 +231,7 @@ export interface SkillDefinition {
   projectileSpeed?: number;
   projectileRange?: number;
   pierceCount?: number;
+  levelScaling: SkillLevelData[];
 }
 
 export const SKILL_DEFS: Record<string, SkillDefinition> = {
@@ -234,6 +244,11 @@ export const SKILL_DEFS: Record<string, SkillDefinition> = {
     castDurationMs: 300,
     damageMultiplier: 1.5,
     radius: 100,
+    levelScaling: [
+      { damageMultiplier: 1.5, radius: 100 },
+      { damageMultiplier: 1.8, radius: 110 },
+      { damageMultiplier: 2.1, radius: 120 },
+    ],
   },
   'shadow-dash': {
     type: 'shadow-dash',
@@ -246,6 +261,11 @@ export const SKILL_DEFS: Record<string, SkillDefinition> = {
     dashDistance: 150,
     dashDurationMs: 200,
     dashPathWidth: 32,
+    levelScaling: [
+      { damageMultiplier: 0.8, dashDistance: 150 },
+      { damageMultiplier: 1.0, dashDistance: 170 },
+      { damageMultiplier: 1.2, dashDistance: 190 },
+    ],
   },
   'arcane-bolt': {
     type: 'arcane-bolt',
@@ -258,6 +278,11 @@ export const SKILL_DEFS: Record<string, SkillDefinition> = {
     projectileSpeed: 350,
     projectileRange: 300,
     pierceCount: 2,
+    levelScaling: [
+      { damageMultiplier: 2.0, pierceCount: 2 },
+      { damageMultiplier: 2.4, pierceCount: 3 },
+      { damageMultiplier: 2.8, pierceCount: 4 },
+    ],
   },
 };
 
