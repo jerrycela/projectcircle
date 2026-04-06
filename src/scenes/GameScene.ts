@@ -64,7 +64,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   init(data?: RunState): void {
-    this.runState = data;
+    // Phaser passes {} on fresh start, so check for actual RunState content
+    this.runState = data?.floorManagerState ? data : undefined;
   }
 
   create(): void {
