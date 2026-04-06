@@ -27,7 +27,7 @@ export interface RunState {
   playerGold: number;
   playerMaterials: { wood: number; ore: number; cloth: number };
   floorManagerState: FloorState;
-  playerSkills?: string[];
+  playerSkills?: Array<string | { type: string; level: number }>;
   playerEquipment?: Record<EquipmentSlot, EquipmentItem | null>;
   equipmentNextId?: number;
 }
@@ -50,7 +50,7 @@ export class GameScene extends Phaser.Scene {
   public projectileGroup!: Phaser.Physics.Arcade.Group;
   public lootGroup!: Phaser.GameObjects.Group;
   public currentPlayerRoom: number | null = null;
-  private altar?: Altar;
+  public altar?: Altar;
   public floorManager!: FloorManager;
   private staircase?: Staircase;
   private runState?: RunState;
@@ -224,18 +224,15 @@ export class GameScene extends Phaser.Scene {
     // Combat system — receives skill manager reference
     this.combatSystem = new CombatSystem(this, this.statsManager, this.skillManager, this.equipmentManager);
 
-    EventBus.on('altar-consumed', () => {
-      this.altar?.consume();
+    EventBus.on('altar-session-closed', (data: { altar: unknown; reason: string }) => {
+      if (this.altar && data.altar === this.altar) {
+        this.altar.endSession();
+      }
     });
 
     // Skill cast requests from UIScene (skill button taps)
     EventBus.on('skill-cast-request', (slotIndex: number) => {
       this.skillManager.cast(slotIndex);
-    });
-
-    // Skill acquisition from altar
-    EventBus.on('skill-acquired', (type: string) => {
-      this.skillManager.addSkill(type);
     });
 
     // Equipment pickup — forward to UIScene
@@ -302,10 +299,9 @@ export class GameScene extends Phaser.Scene {
     EventBus.off('joystick-stop');
     EventBus.off('player-died');
     EventBus.off('gameplay-lock');
-    EventBus.off('altar-consumed');
+    EventBus.off('altar-session-closed');
     EventBus.off('floor-cleared');
     EventBus.off('skill-cast-request');
-    EventBus.off('skill-acquired');
     EventBus.off('equipment-pickup');
     EventBus.off('equipment-compare-done');
   }

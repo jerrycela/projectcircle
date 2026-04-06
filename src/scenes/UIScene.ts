@@ -5,6 +5,7 @@ import { UpgradePanel } from '../ui/UpgradePanel';
 import { EquipmentComparePanel } from '../ui/EquipmentComparePanel';
 import { EquipmentPanel } from '../ui/EquipmentPanel';
 import type { GameScene } from './GameScene';
+import type { Altar } from '../entities/Altar';
 import EventBus from '../systems/EventBus';
 
 export class UIScene extends Phaser.Scene {
@@ -27,10 +28,10 @@ export class UIScene extends Phaser.Scene {
     this.equipmentComparePanel = new EquipmentComparePanel(this);
     this.equipmentPanel = new EquipmentPanel(this);
 
-    EventBus.on('altar-activated', () => {
+    EventBus.on('altar-activated', (altar: Altar) => {
       const gameScene = this.scene.get('GameScene') as GameScene;
-      if (gameScene?.statsManager && gameScene?.player) {
-        this.upgradePanel.show(gameScene.statsManager, gameScene.player, gameScene.skillManager);
+      if (gameScene?.statsManager && gameScene?.player && gameScene?.skillManager) {
+        this.upgradePanel.show(gameScene.statsManager, gameScene.player, gameScene.skillManager, altar);
       }
     });
 
