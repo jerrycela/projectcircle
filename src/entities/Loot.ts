@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import type { EquipmentItem } from '../config';
+import { EQUIPMENT_RARITY_DEFS } from '../config';
+import type { EquipmentRarity } from '../config';
 
 export const LootType = {
   gold: 'gold',
@@ -45,6 +47,11 @@ export class Loot extends Phaser.GameObjects.Image {
     this.rarity = rarity;
 
     scene.add.existing(this);
+
+    // Apply rarity tint for equipment
+    if (lootType === LootType.equipment && rarity && rarity in EQUIPMENT_RARITY_DEFS) {
+      this.setTint(EQUIPMENT_RARITY_DEFS[rarity as EquipmentRarity].color);
+    }
 
     this.startBob();
     this.playSpawnAnimation();

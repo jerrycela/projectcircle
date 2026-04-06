@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_CONFIG, EQUIPMENT_SLOTS } from '../config';
+import { GAME_CONFIG, EQUIPMENT_SLOTS, EQUIPMENT_RARITY_DEFS } from '../config';
 import { Loot, LootType } from '../entities/Loot';
 import type { LootType as LootTypeT } from '../entities/Loot';
 import type { Player } from '../entities/Player';
@@ -102,6 +102,10 @@ export class LootSystem {
       existing.setActive(true);
       existing.setVisible(true);
       existing.setScale(0);
+      existing.clearTint();
+      if (type === LootType.equipment && rarity && rarity in EQUIPMENT_RARITY_DEFS) {
+        existing.setTint(EQUIPMENT_RARITY_DEFS[rarity as EquipmentRarity].color);
+      }
       this.pulling.delete(existing);
 
       // Pop-in animation

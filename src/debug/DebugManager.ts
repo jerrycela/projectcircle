@@ -233,7 +233,14 @@ export class DebugManager {
                     : 1;
         const spawnX = player.x + Phaser.Math.Between(-30, 30);
         const spawnY = player.y + Phaser.Math.Between(-30, 30);
-        lootSystem.spawnLoot(spawnX, spawnY, lootType, value, rarity);
+        const loot = lootSystem.spawnLoot(spawnX, spawnY, lootType, value, rarity);
+        // Generate equipmentData for equipment loot so it's collectible
+        if (lootType === LootType.equipment && this.scene.equipmentManager) {
+          const eqRarity = (rarity && rarity in EQUIPMENT_RARITY_DEFS ? rarity : 'blue') as import('../config').EquipmentRarity;
+          const eqSlot = EQUIPMENT_SLOTS[Math.floor(Math.random() * EQUIPMENT_SLOTS.length)] as import('../config').EquipmentSlot;
+          const floor = this.scene.floorManager?.currentFloor ?? 1;
+          loot.equipmentData = this.scene.equipmentManager.generateEquipment(eqSlot, eqRarity, floor);
+        }
         console.log(`[Debug] spawnLoot: ${lootType}${rarity ? ` (${rarity})` : ''} at (${spawnX.toFixed(0)}, ${spawnY.toFixed(0)})`);
       },
       teleport: (x: number, y: number) => {
