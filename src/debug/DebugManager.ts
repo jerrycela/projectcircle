@@ -266,6 +266,7 @@ export class DebugManager {
             currentFloor: floor,
             highestFloor: Math.max(this.scene.floorManager.highestFloor, floor),
           },
+          playerSkills: this.scene.skillManager.exportState().skills,
         };
         console.log(`[Debug] setFloor: jumping to floor ${floor}`);
         this.scene.scene.restart(runState);
