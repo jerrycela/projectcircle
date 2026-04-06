@@ -3,7 +3,8 @@ import { DebugManager } from '../debug/DebugManager';
 import { generate } from '../systems/DungeonGenerator';
 import { RoomState } from '../systems/DungeonGenerator';
 import type { Room } from '../systems/DungeonGenerator';
-import { GAME_CONFIG, ENEMY_DEFS } from '../config';
+import { GAME_CONFIG } from '../config';
+import type { EnemyConfig } from '../config';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import EventBus from '../systems/EventBus';
@@ -333,7 +334,7 @@ export class GameScene extends Phaser.Scene {
       const roomEnemies = enemies.filter(e => e.roomIndex === i);
       if (roomEnemies.length === 0) continue;
 
-      const anyAlive = roomEnemies.some(e => e.active);
+      const anyAlive = roomEnemies.some(e => e.active && !e.isSummon);
       if (!anyAlive) {
         room.state = RoomState.CLEARED;
         console.log(`[GameScene] Room ${i} cleared`);
@@ -358,7 +359,6 @@ export class GameScene extends Phaser.Scene {
     const countRange = countOverride ?? GAME_CONFIG.ENEMIES_PER_ROOM;
     const count = Phaser.Math.Between(countRange.min, countRange.max);
 
-    // Room world bounds (inner floor area, excluding wall tiles)
     const roomLeft = room.x * tileSize;
     const roomTop = room.y * tileSize;
     const roomRight = (room.x + room.width) * tileSize;
@@ -368,19 +368,24 @@ export class GameScene extends Phaser.Scene {
     const safeFromWall = GAME_CONFIG.SPAWN_SAFETY_FROM_WALL;
     const maxRetries = 20;
 
-    for (let i = 0; i < count; i++) {
-      let placed = false;
+    const spawnTable = this.floorManager.getSpawnTable();
+    const roomTypeCounts: Record<string, number> = {};
 
+    for (let i = 0; i < count; i++) {
+      const config = this.pickEnemyConfig(spawnTable, roomTypeCounts);
+      if (!config) continue;
+
+      roomTypeCounts[config.type] = (roomTypeCounts[config.type] ?? 0) + 1;
+
+      let placed = false;
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         const wx = Phaser.Math.Between(roomLeft + safeFromWall, roomRight - safeFromWall);
         const wy = Phaser.Math.Between(roomTop + safeFromWall, roomBottom - safeFromWall);
 
-        // Check distance from player
         const pdx = wx - this.player.x;
         const pdy = wy - this.player.y;
         if (Math.sqrt(pdx * pdx + pdy * pdy) < safeFromPlayer) continue;
 
-        // Check that this tile is floor (grid value 0)
         const gx = Math.floor(wx / tileSize);
         const gy = Math.floor(wy / tileSize);
         if (
@@ -389,10 +394,7 @@ export class GameScene extends Phaser.Scene {
           this.grid[gy][gx] !== 0
         ) continue;
 
-        // Valid position found
-        // TODO(Task 5): replace with config from FloorManager spawn table
-        const enemyConfig = ENEMY_DEFS['spider'];
-        const enemy = new Enemy(this, wx, wy, roomIndex, enemyConfig, hpScale, atkScale);
+        const enemy = new Enemy(this, wx, wy, roomIndex, config, hpScale, atkScale);
         this.enemyGroup.add(enemy);
         placed = true;
         break;
@@ -402,6 +404,25 @@ export class GameScene extends Phaser.Scene {
         console.warn(`[GameScene] Could not place enemy ${i} in room ${roomIndex} after ${maxRetries} attempts`);
       }
     }
+  }
+
+  private pickEnemyConfig(
+    spawnTable: { config: EnemyConfig; weight: number }[],
+    roomTypeCounts: Record<string, number>,
+  ): EnemyConfig | null {
+    const available = spawnTable.filter(e => {
+      if (e.config.maxPerRoom === undefined) return true;
+      return (roomTypeCounts[e.config.type] ?? 0) < e.config.maxPerRoom;
+    });
+    if (available.length === 0) return null;
+
+    const availWeight = available.reduce((sum, e) => sum + e.weight, 0);
+    let roll = Math.random() * availWeight;
+    for (const entry of available) {
+      roll -= entry.weight;
+      if (roll <= 0) return entry.config;
+    }
+    return available[available.length - 1].config;
   }
 
   private pickStaircaseRoom(): number | null {
