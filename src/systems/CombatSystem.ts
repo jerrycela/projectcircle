@@ -12,9 +12,10 @@ export class CombatSystem {
   constructor(scene: GameScene) {
     this.scene = scene;
 
-    // Camera flash on player hit
+    // Camera flash + shake on player hit
     EventBus.on('player-hit', () => {
       scene.cameras.main.flash(100, 255, 0, 0, false);
+      scene.cameras.main.shake(120, 0.008);
     });
   }
 
@@ -94,8 +95,12 @@ export class CombatSystem {
     // Floating damage number
     this.spawnDamageNumber(enemy.x, enemy.y, damage, isCrit);
 
-    // Enemy hit flash
+    // Enemy hit flash + shake
     this.flashEnemy(enemy);
+    this.shakeEnemy(enemy);
+
+    // Screen shake on hit (subtle)
+    this.scene.cameras.main.shake(80, 0.003);
 
     // Purple particles
     this.spawnHitParticles(enemy.x, enemy.y);
@@ -180,6 +185,21 @@ export class CombatSystem {
       if (enemy.active) {
         enemy.clearTint();
       }
+    });
+  }
+
+  private shakeEnemy(enemy: Enemy): void {
+    const baseX = enemy.x;
+    this.scene.tweens.add({
+      targets: enemy,
+      x: baseX + 2,
+      duration: 25,
+      yoyo: true,
+      repeat: 2,
+      ease: 'Sine.InOut',
+      onComplete: () => {
+        if (enemy.active) enemy.setPosition(baseX, enemy.y);
+      },
     });
   }
 
