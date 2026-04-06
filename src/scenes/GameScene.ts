@@ -3,7 +3,7 @@ import { DebugManager } from '../debug/DebugManager';
 import { generate } from '../systems/DungeonGenerator';
 import { RoomState } from '../systems/DungeonGenerator';
 import type { Room } from '../systems/DungeonGenerator';
-import { GAME_CONFIG } from '../config';
+import { GAME_CONFIG, ENEMY_DEFS } from '../config';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import EventBus from '../systems/EventBus';
@@ -390,7 +390,9 @@ export class GameScene extends Phaser.Scene {
         ) continue;
 
         // Valid position found
-        const enemy = new Enemy(this, wx, wy, roomIndex, hpScale, atkScale);
+        // TODO(Task 5): replace with config from FloorManager spawn table
+        const enemyConfig = ENEMY_DEFS['spider'];
+        const enemy = new Enemy(this, wx, wy, roomIndex, enemyConfig, hpScale, atkScale);
         this.enemyGroup.add(enemy);
         placed = true;
         break;
