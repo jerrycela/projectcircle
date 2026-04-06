@@ -317,3 +317,77 @@ export const UPGRADE_DEFS: Record<string, UpgradeDefinition> = {
     maxLevel: 10,
   },
 };
+
+// ---- Equipment System ----
+
+export type EquipmentSlot = 'weapon' | 'armor' | 'helmet' | 'accessory';
+export type EquipmentRarity = 'white' | 'green' | 'blue' | 'purple';
+
+export interface EquipmentItem {
+  id: number;
+  slot: EquipmentSlot;
+  subtype: string;
+  rarity: EquipmentRarity;
+  stats: Partial<Record<'attackMin' | 'attackMax' | 'armor' | 'critChance' | 'critDamage' | 'recovery' | 'moveSpeed' | 'maxHp', number>>;
+  name: string;
+}
+
+export const EQUIPMENT_SLOTS: EquipmentSlot[] = ['weapon', 'armor', 'helmet', 'accessory'];
+
+export const EQUIPMENT_RARITY_DEFS: Record<EquipmentRarity, {
+  affixCount: number | { min: number; max: number };
+  valueMult: number;
+  dropWeight: number;
+  color: number;
+  label: string;
+}> = {
+  white:  { affixCount: 1,              valueMult: 1.0, dropWeight: 0.60, color: 0xffffff, label: 'Common' },
+  green:  { affixCount: { min: 1, max: 2 }, valueMult: 1.3, dropWeight: 0.25, color: 0x00ff00, label: 'Uncommon' },
+  blue:   { affixCount: 2,              valueMult: 1.6, dropWeight: 0.12, color: 0x3399ff, label: 'Rare' },
+  purple: { affixCount: 3,              valueMult: 1.9, dropWeight: 0.03, color: 0x9933ff, label: 'Epic' },
+};
+
+export const EQUIPMENT_STAT_POOLS: Record<EquipmentSlot, string[]> = {
+  weapon:    ['damageFlat', 'critChance', 'critDamage'],
+  armor:     ['armor', 'maxHp'],
+  helmet:    ['armor', 'maxHp', 'recovery'],
+  accessory: ['critChance', 'critDamage', 'moveSpeed', 'recovery'],
+};
+
+// Base range per affix at floor 1. Floor scaling: value * (1 + (floor-1) * 0.1)
+export const EQUIPMENT_BASE_RANGES: Record<string, { min: number; max: number }> = {
+  damageFlat: { min: 3, max: 8 },
+  armor:      { min: 2, max: 5 },
+  maxHp:      { min: 15, max: 40 },
+  critChance: { min: 0.01, max: 0.03 },
+  critDamage: { min: 0.05, max: 0.15 },
+  recovery:   { min: 0.5, max: 1.5 },
+  moveSpeed:  { min: 8, max: 20 },
+};
+
+export const WEAPON_TYPE_DEFS: Record<string, {
+  label: string;
+  attackSpeedMult: number;
+  rangeMult: number;
+  damageMult: number;
+}> = {
+  axe:    { label: 'Axe',    attackSpeedMult: 1.0,  rangeMult: 1.0, damageMult: 1.0 },
+  sword:  { label: 'Sword',  attackSpeedMult: 1.25, rangeMult: 1.0, damageMult: 0.85 },
+  hammer: { label: 'Hammer', attackSpeedMult: 0.7,  rangeMult: 1.2, damageMult: 1.4 },
+};
+
+export const WEAPON_SUBTYPES = ['axe', 'sword', 'hammer'] as const;
+
+export const EQUIPMENT_NAME_PREFIXES: Record<EquipmentRarity, string[]> = {
+  white:  ['Worn', 'Old', 'Plain'],
+  green:  ['Sturdy', 'Refined', 'Solid'],
+  blue:   ['Superior', 'Fine', 'Enchanted'],
+  purple: ['Legendary', 'Cursed', 'Ancient'],
+};
+
+export const EQUIPMENT_SLOT_LABELS: Record<EquipmentSlot, string> = {
+  weapon: 'Weapon',
+  armor: 'Armor',
+  helmet: 'Helmet',
+  accessory: 'Accessory',
+};
