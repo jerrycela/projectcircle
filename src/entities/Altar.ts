@@ -3,13 +3,14 @@ import { GAME_CONFIG } from '../config';
 import type { Player } from './Player';
 import EventBus from '../systems/EventBus';
 
-type AltarState = 'IDLE' | 'IN_RANGE' | 'ARMING' | 'OPEN' | 'CONSUMED';
+type AltarState = 'IDLE' | 'IN_RANGE' | 'ARMING' | 'OPEN' | 'COOLDOWN';
 
 export class Altar extends Phaser.GameObjects.Image {
   private altarState: AltarState = 'IDLE';
   private armTimer: number = 0;
   private promptText: Phaser.GameObjects.Text;
   private playerRef: Player;
+  public skillOffered: boolean = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, player: Player) {
     super(scene, x, y, 'altar');
@@ -30,8 +31,6 @@ export class Altar extends Phaser.GameObjects.Image {
   }
 
   update(_time: number, delta: number): void {
-    if (this.altarState === 'CONSUMED' || this.altarState === 'OPEN') return;
-
     const dx = this.playerRef.x - this.x;
     const dy = this.playerRef.y - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -67,7 +66,6 @@ export class Altar extends Phaser.GameObjects.Image {
           this.promptText.setAlpha(1);
         } else {
           this.armTimer += delta;
-          // Pulse prompt text
           this.promptText.setAlpha(0.5 + 0.5 * Math.sin(this.armTimer * 0.01));
           if (this.armTimer >= GAME_CONFIG.ALTAR_ARM_DELAY) {
             this.altarState = 'OPEN';
@@ -76,12 +74,22 @@ export class Altar extends Phaser.GameObjects.Image {
           }
         }
         break;
+
+      case 'OPEN':
+        // Waiting for panel to close — do nothing
+        break;
+
+      case 'COOLDOWN':
+        // Wait for player to leave range before allowing re-trigger
+        if (!inRange) {
+          this.altarState = 'IDLE';
+        }
+        break;
     }
   }
 
-  consume(): void {
-    this.altarState = 'CONSUMED';
-    this.setAlpha(0.3);
+  endSession(): void {
+    this.altarState = 'COOLDOWN';
     this.promptText.setVisible(false);
   }
 }
