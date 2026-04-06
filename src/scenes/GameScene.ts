@@ -17,15 +17,19 @@ import { FloorManager } from '../systems/FloorManager';
 import type { FloorState } from '../systems/FloorManager';
 import { Staircase } from '../entities/Staircase';
 import { SkillManager } from '../systems/SkillManager';
+import { EquipmentManager } from '../systems/EquipmentManager';
+import type { EquipmentItem, EquipmentSlot } from '../config';
 
 export interface RunState {
-  statsManagerState: { bonuses: StatBlock; levels: Record<string, number> };
+  statsManagerState: { bonuses: StatBlock; levels: Record<string, number>; equipmentBonuses?: Partial<StatBlock> };
   playerHp: number;
   playerMp: number;
   playerGold: number;
   playerMaterials: { wood: number; ore: number; cloth: number };
   floorManagerState: FloorState;
   playerSkills?: string[];
+  playerEquipment?: Record<EquipmentSlot, EquipmentItem | null>;
+  equipmentNextId?: number;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -34,6 +38,7 @@ export class GameScene extends Phaser.Scene {
   public lootSystem!: LootSystem;
   public statsManager!: StatsManager;
   public skillManager!: SkillManager;
+  public equipmentManager!: EquipmentManager;
   public gameplayLocked: boolean = false;
   private recoveryAccum: number = 0;
 
@@ -138,6 +143,15 @@ export class GameScene extends Phaser.Scene {
       this.player.maxHp = this.statsManager.getStat('maxHp');
     }
 
+    // Equipment manager
+    this.equipmentManager = new EquipmentManager(this.statsManager, this.player);
+    if (this.runState?.playerEquipment) {
+      this.equipmentManager.importState({
+        equipped: this.runState.playerEquipment,
+        nextId: this.runState.equipmentNextId ?? 0,
+      });
+    }
+
     // Player vs walls collider
     this.physics.add.collider(this.player, this.wallGroup);
 
@@ -196,7 +210,7 @@ export class GameScene extends Phaser.Scene {
 
     // Loot group and system
     this.lootGroup = this.add.group();
-    this.lootSystem = new LootSystem(this, this.player, this.lootGroup);
+    this.lootSystem = new LootSystem(this, this.player, this.lootGroup, this.equipmentManager);
 
     // Projectile group (for arcane bolt, etc.)
     this.projectileGroup = this.physics.add.group();
@@ -208,7 +222,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Combat system — receives skill manager reference
-    this.combatSystem = new CombatSystem(this, this.statsManager, this.skillManager);
+    this.combatSystem = new CombatSystem(this, this.statsManager, this.skillManager, this.equipmentManager);
 
     EventBus.on('altar-consumed', () => {
       this.altar?.consume();
@@ -222,6 +236,20 @@ export class GameScene extends Phaser.Scene {
     // Skill acquisition from altar
     EventBus.on('skill-acquired', (type: string) => {
       this.skillManager.addSkill(type);
+    });
+
+    // Equipment pickup — forward to UIScene
+    EventBus.on('equipment-pickup', (item: EquipmentItem, loot: import('../entities/Loot').Loot) => {
+      this.gameplayLocked = true;
+      this.physics.pause();
+      EventBus.emit('gameplay-lock', true);
+      EventBus.emit('show-equipment-compare', item, loot);
+    });
+
+    EventBus.on('equipment-compare-done', () => {
+      this.gameplayLocked = false;
+      this.physics.resume();
+      EventBus.emit('gameplay-lock', false);
     });
 
     // Player death handler
@@ -278,6 +306,8 @@ export class GameScene extends Phaser.Scene {
     EventBus.off('floor-cleared');
     EventBus.off('skill-cast-request');
     EventBus.off('skill-acquired');
+    EventBus.off('equipment-pickup');
+    EventBus.off('equipment-compare-done');
   }
 
   update(time: number, delta: number): void {
@@ -478,18 +508,10 @@ export class GameScene extends Phaser.Scene {
 
     this.cameras.main.fadeOut(300, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      const runState: RunState = {
-        statsManagerState: this.statsManager.exportState(),
-        playerHp: this.player.hp,
-        playerMp: this.player.mp,
-        playerGold: this.player.gold,
-        playerMaterials: { ...this.player.materials },
-        floorManagerState: (() => {
-          this.floorManager.advanceFloor();
-          return this.floorManager.exportState();
-        })(),
-        playerSkills: this.skillManager.exportState().skills,
-      };
+      this.floorManager.advanceFloor();
+      const runState = this.buildRunState({
+        floorManagerState: this.floorManager.exportState(),
+      });
       this.scene.restart(runState);
     });
   }
@@ -501,8 +523,7 @@ export class GameScene extends Phaser.Scene {
     EventBus.emit('show-death-text', this.floorManager.currentFloor);
 
     this.time.delayedCall(1500, () => {
-      const runState: RunState = {
-        statsManagerState: this.statsManager.exportState(),
+      const runState = this.buildRunState({
         playerHp: this.statsManager.getStat('maxHp'),
         playerMp: GAME_CONFIG.PLAYER_MP,
         playerGold: 0,
@@ -511,11 +532,25 @@ export class GameScene extends Phaser.Scene {
           currentFloor: 1,
           highestFloor: this.floorManager.highestFloor,
         },
-        // Skills persist on death (same as upgrades)
-        playerSkills: this.skillManager.exportState().skills,
-      };
+      });
       this.scene.restart(runState);
     });
+  }
+
+  buildRunState(overrides?: Partial<RunState>): RunState {
+    const equipState = this.equipmentManager.exportState();
+    const base: RunState = {
+      statsManagerState: this.statsManager.exportState(),
+      playerHp: this.player.hp,
+      playerMp: this.player.mp,
+      playerGold: this.player.gold,
+      playerMaterials: { ...this.player.materials },
+      floorManagerState: this.floorManager.exportState(),
+      playerSkills: this.skillManager.exportState().skills,
+      playerEquipment: equipState.equipped,
+      equipmentNextId: equipState.nextId,
+    };
+    return { ...base, ...overrides };
   }
 
   private handleInput(): void {
