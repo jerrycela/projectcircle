@@ -17,6 +17,7 @@ export class Joystick {
 
   private readonly maxRadius: number = GAME_CONFIG.JOYSTICK_MAX_RADIUS;
   private readonly deadZone: number = GAME_CONFIG.JOYSTICK_DEAD_ZONE;
+  private locked: boolean = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -35,6 +36,15 @@ export class Joystick {
     scene.input.on('pointermove', this.onPointerMove, this);
     scene.input.on('pointerup', this.onPointerUp, this);
     scene.input.on('pointerupoutside', this.onPointerUp, this);
+
+    EventBus.on('ui-input-lock', () => {
+      this.locked = true;
+      this.resetJoystick();
+    });
+
+    EventBus.on('ui-input-unlock', () => {
+      this.locked = false;
+    });
   }
 
   private resetJoystick(): void {
@@ -48,6 +58,7 @@ export class Joystick {
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.locked) return;
     // Reset stale state — if a pointerup was missed, allow new activation
     if (this.active && this.pointerId !== pointer.id) {
       this.resetJoystick();
@@ -71,6 +82,7 @@ export class Joystick {
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
     if (!this.active || pointer.id !== this.pointerId) return;
+    if (this.locked) return;
 
     const dx = pointer.x - this.baseX;
     const dy = pointer.y - this.baseY;
