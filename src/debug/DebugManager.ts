@@ -90,6 +90,9 @@ interface DebugAPI {
   removeEquipment(slot: string): void;
   removeAllEquipment(): void;
   listEquipment(): void;
+  resetSkillOffered(): void;
+  openShop(): void;
+  setSkillLevel(type: string, level: number): void;
 }
 
 declare global {
@@ -397,6 +400,50 @@ export class DebugManager {
             console.log(`[${slot}] empty`);
           }
         }
+      },
+
+      // ---- Altar commands
+      resetSkillOffered: () => {
+        const gameScene = this.scene;
+        if (gameScene.altar) {
+          gameScene.altar.skillOffered = false;
+          console.log('[Debug] resetSkillOffered: skill phase will trigger on next altar visit');
+        } else {
+          console.log('[Debug] resetSkillOffered: no altar in current floor');
+        }
+      },
+      openShop: () => {
+        const gameScene = this.scene;
+        if (gameScene.altar) {
+          EventBus.emit('altar-activated', gameScene.altar);
+          console.log('[Debug] openShop: forcing altar activation');
+        } else {
+          console.log('[Debug] openShop: no altar in current floor');
+        }
+      },
+      setSkillLevel: (type: string, level: number) => {
+        const gameScene = this.scene;
+        if (!gameScene.skillManager) {
+          console.log('[Debug] setSkillLevel: skillManager not ready');
+          return;
+        }
+        if (!gameScene.skillManager.hasSkill(type)) {
+          console.log(`[Debug] setSkillLevel: player doesn't have skill "${type}"`);
+          return;
+        }
+        if (level < 1 || level > GAME_CONFIG.SKILL_MAX_LEVEL) {
+          console.log(`[Debug] setSkillLevel: level must be 1-${GAME_CONFIG.SKILL_MAX_LEVEL}`);
+          return;
+        }
+        const slots = (gameScene.skillManager as unknown as { slots: Array<{ type: string | null; level: number }> }).slots;
+        for (const slot of slots) {
+          if (slot.type === type) {
+            slot.level = level;
+            break;
+          }
+        }
+        EventBus.emit('skill-state-changed');
+        console.log(`[Debug] setSkillLevel: ${type} -> Lv.${level}`);
       },
     };
   }
