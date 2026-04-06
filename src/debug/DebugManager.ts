@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import type { GameScene } from '../scenes/GameScene';
 import { RoomState } from '../systems/DungeonGenerator';
-import { GAME_CONFIG } from '../config';
-import type { Enemy } from '../entities/Enemy';
+import { GAME_CONFIG, ENEMY_DEFS } from '../config';
+import { Enemy } from '../entities/Enemy';
 import { LootType } from '../entities/Loot';
 import type { LootType as LootTypeT } from '../entities/Loot';
 import EventBus from '../systems/EventBus';
@@ -32,6 +32,7 @@ interface GameState {
     roomsCleared: number;
     totalEnemies: number;
     aliveEnemies: number;
+    enemyTypes: Record<string, number>;
   };
   loot: {
     itemsOnGround: number;
@@ -51,6 +52,8 @@ interface DebugAPI {
   setHp(value: number): void;
   setMp(value: number): void;
   spawnEnemies(count: number, type?: string): void;
+  spawnEnemy(type: string): void;
+  listEnemyTypes(): void;
   killAllEnemies(): void;
   setInvincible(on: boolean): void;
   spawnLoot(type: string, rarity?: string): void;
@@ -137,10 +140,40 @@ export class DebugManager {
         if (!player) { console.log('[Debug] spawnEnemies: player not ready'); return; }
         // Find which room player is in, default to 0
         const roomIndex = this.scene.currentPlayerRoom ?? 0;
+        const fc = this.scene.floorManager.getFloorConfig();
         for (let i = 0; i < count; i++) {
-          this.scene.spawnEnemiesInRoom(roomIndex);
+          this.scene.spawnEnemiesInRoom(roomIndex, fc.enemyHpScale, fc.enemyAtkScale, fc.enemiesPerRoom);
         }
         console.log(`[Debug] Requested ${count} enemy spawn batch(es) in room ${roomIndex}`);
+      },
+      spawnEnemy: (type: string) => {
+        const config = ENEMY_DEFS[type];
+        if (!config) {
+          console.log(`[Debug] Unknown enemy type: ${type}. Use listEnemyTypes() to see available types.`);
+          return;
+        }
+        const player = this.scene.player;
+        const offsetX = (Math.random() - 0.5) * 100 + 80;
+        const offsetY = (Math.random() - 0.5) * 100 + 80;
+        const fc = this.scene.floorManager.getFloorConfig();
+        const enemy = new Enemy(
+          this.scene,
+          player.x + offsetX,
+          player.y + offsetY,
+          this.scene.currentPlayerRoom ?? 0,
+          config,
+          fc.enemyHpScale,
+          fc.enemyAtkScale,
+        );
+        this.scene.enemyGroup.add(enemy);
+        console.log(`[Debug] Spawned ${type} at (${Math.round(enemy.x)}, ${Math.round(enemy.y)})`);
+      },
+      listEnemyTypes: () => {
+        console.log('[Debug] Enemy types:');
+        for (const [key, config] of Object.entries(ENEMY_DEFS)) {
+          const unlocked = config.unlockFloor <= this.scene.floorManager.currentFloor;
+          console.log(`  ${key}: F${config.unlockFloor}+ | ${config.aiType} | ${unlocked ? 'UNLOCKED' : 'LOCKED'}`);
+        }
       },
       killAllEnemies: () => {
         const enemies = this.scene.enemyGroup?.getChildren() as Enemy[] | undefined;
@@ -270,6 +303,14 @@ export class DebugManager {
         aliveEnemies: this.scene.enemyGroup
           ? (this.scene.enemyGroup.getChildren() as Enemy[]).filter(e => e.active).length
           : 0,
+        enemyTypes: this.scene.enemyGroup
+          ? (this.scene.enemyGroup.getChildren() as Enemy[])
+              .filter(e => e.active)
+              .reduce((acc: Record<string, number>, e) => {
+                acc[e.config.type] = (acc[e.config.type] ?? 0) + 1;
+                return acc;
+              }, {})
+          : {},
       },
       loot: {
         itemsOnGround: this.scene.lootGroup
