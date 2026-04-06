@@ -5,6 +5,7 @@ import type { Enemy } from '../entities/Enemy';
 import EventBus from './EventBus';
 import type { StatsManager } from './StatsManager';
 import type { SkillManager } from './SkillManager';
+import type { EquipmentManager } from './EquipmentManager';
 
 export class CombatSystem {
   private scene: GameScene;
@@ -12,11 +13,13 @@ export class CombatSystem {
   private skillManager?: SkillManager;
   private lastAttackTime: number = 0;
   private lastScanTime: number = 0;
+  private equipmentManager?: EquipmentManager;
 
-  constructor(scene: GameScene, statsManager: StatsManager, skillManager?: SkillManager) {
+  constructor(scene: GameScene, statsManager: StatsManager, skillManager?: SkillManager, equipmentManager?: EquipmentManager) {
     this.scene = scene;
     this.statsManager = statsManager;
     this.skillManager = skillManager;
+    this.equipmentManager = equipmentManager;
 
     // Camera shake on player hit (no flash for normal attacks, reserved for skills)
     EventBus.on('player-hit', () => {
@@ -39,27 +42,26 @@ export class CombatSystem {
   private tryPlayerAttack(time: number): void {
     const player = this.scene.player;
 
-    // Suppress auto-attack while any skill is in CASTING state
     if (this.skillManager?.isCasting()) return;
-
-    // CRITICAL: player must NOT be moving to auto-attack
     if (player.isMoving) return;
 
-    // Check attack cooldown
-    if (time - this.lastAttackTime < GAME_CONFIG.ATTACK_COOLDOWN) return;
+    const mods = this.equipmentManager?.getWeaponModifiers() ?? { attackSpeedMult: 1, rangeMult: 1, damageMult: 1 };
+    const cooldown = GAME_CONFIG.ATTACK_COOLDOWN / mods.attackSpeedMult;
+    if (time - this.lastAttackTime < cooldown) return;
 
-    // Find nearest enemy in range
-    const enemy = this.findNearestEnemyInRange();
+    const range = GAME_CONFIG.ATTACK_RANGE * mods.rangeMult;
+    const enemy = this.findNearestEnemyInRange(range);
     if (!enemy) return;
 
     this.lastAttackTime = time;
-    this.executePlayerAttack(player, enemy);
+    this.executePlayerAttack(player, enemy, mods.damageMult);
   }
 
-  private findNearestEnemyInRange(): Enemy | null {
+  private findNearestEnemyInRange(range?: number): Enemy | null {
     const player = this.scene.player;
     const enemies = this.scene.enemyGroup.getChildren() as Enemy[];
-    const rangeSq = GAME_CONFIG.ATTACK_RANGE * GAME_CONFIG.ATTACK_RANGE;
+    const r = range ?? GAME_CONFIG.ATTACK_RANGE;
+    const rangeSq = r * r;
 
     let nearest: Enemy | null = null;
     let nearestDistSq = Infinity;
@@ -80,7 +82,7 @@ export class CombatSystem {
     return nearest;
   }
 
-  private executePlayerAttack(player: Phaser.GameObjects.Container, enemy: Enemy): void {
+  private executePlayerAttack(player: Phaser.GameObjects.Container, enemy: Enemy, damageMult: number = 1): void {
     // Calculate damage
     let damage = Phaser.Math.Between(
       this.statsManager.getStat('attackMin'),
@@ -92,6 +94,7 @@ export class CombatSystem {
       damage = Math.floor(damage * this.statsManager.getStat('critDamage'));
       isCrit = true;
     }
+    damage = Math.round(damage * damageMult);
 
     // Direction from player to enemy
     const dx = enemy.x - player.x;

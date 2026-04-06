@@ -26,6 +26,27 @@ export class BootScene extends Phaser.Scene {
     playerWeapon.generateTexture('player-weapon', 30, 8);
     playerWeapon.destroy();
 
+    // weapon-axe: 30x10 brown rectangle (default weapon)
+    const weaponAxe = this.make.graphics({ x: 0, y: 0 }, false);
+    weaponAxe.fillStyle(0x8b6914);
+    weaponAxe.fillRect(0, 0, 30, 10);
+    weaponAxe.generateTexture('weapon-axe', 30, 10);
+    weaponAxe.destroy();
+
+    // weapon-sword: 32x6 silver narrow rectangle
+    const weaponSword = this.make.graphics({ x: 0, y: 0 }, false);
+    weaponSword.fillStyle(0xc0c0c0);
+    weaponSword.fillRect(0, 0, 32, 6);
+    weaponSword.generateTexture('weapon-sword', 32, 6);
+    weaponSword.destroy();
+
+    // weapon-hammer: 24x14 dark gray wide rectangle
+    const weaponHammer = this.make.graphics({ x: 0, y: 0 }, false);
+    weaponHammer.fillStyle(0x666666);
+    weaponHammer.fillRect(0, 0, 24, 14);
+    weaponHammer.generateTexture('weapon-hammer', 24, 14);
+    weaponHammer.destroy();
+
     // enemy-spider: 30x30 dark red filled circle
     const enemySpider = this.make.graphics({ x: 0, y: 0 }, false);
     enemySpider.fillStyle(0x8b0000);

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SKILL_DEFS } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import { SkillButton } from './SkillButton';
+import EventBus from '../systems/EventBus';
 
 const HP_BAR_W = 200;
 const HP_BAR_H = 20;
@@ -39,6 +40,8 @@ export class HUD {
 
   // Floor label
   private floorText: Phaser.GameObjects.Text;
+
+  private equipBtn: Phaser.GameObjects.Text;
 
   // Skill buttons
   private skillButton0: SkillButton;
@@ -101,6 +104,20 @@ export class HUD {
     // Skill buttons — right side of screen
     this.skillButton0 = new SkillButton(scene, 390, 620, 0);
     this.skillButton1 = new SkillButton(scene, 390, 720, 1);
+
+    // Equipment button — top right, below materials
+    this.equipBtn = scene.add.text(
+      camW - GOLD_PADDING,
+      44,
+      '[Equip]',
+      { ...TEXT_STYLE, fontSize: '13px', color: '#aaaaff' },
+    );
+    this.equipBtn.setOrigin(1, 0);
+    this.equipBtn.setDepth(11);
+    this.equipBtn.setInteractive({ useHandCursor: true });
+    this.equipBtn.on('pointerup', () => {
+      EventBus.emit('show-equipment-panel');
+    });
   }
 
   /** Call every frame from UIScene.update() */

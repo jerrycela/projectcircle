@@ -6,6 +6,8 @@ import { Enemy } from '../entities/Enemy';
 import { LootType } from '../entities/Loot';
 import type { LootType as LootTypeT } from '../entities/Loot';
 import EventBus from '../systems/EventBus';
+import type { EquipmentItem, EquipmentSlot, EquipmentRarity } from '../config';
+import { EQUIPMENT_SLOTS, EQUIPMENT_RARITY_DEFS } from '../config';
 
 interface GameState {
   player: {
@@ -39,6 +41,12 @@ interface GameState {
   };
   loot: {
     itemsOnGround: number;
+  };
+  equipment: {
+    weapon: { name: string; rarity: string; subtype: string; stats: Record<string, number> } | null;
+    armor: { name: string; rarity: string; stats: Record<string, number> } | null;
+    helmet: { name: string; rarity: string; stats: Record<string, number> } | null;
+    accessory: { name: string; rarity: string; stats: Record<string, number> } | null;
   };
   performance: {
     fps: number;
@@ -77,6 +85,11 @@ interface DebugAPI {
   castSkill(slot: number): void;
   setSkillCooldown(type: string, ms: number): void;
   getSkillCooldown(slot: number): number;
+  // Equipment debug commands
+  giveEquipment(slot?: string, rarity?: string, subtype?: string): void;
+  removeEquipment(slot: string): void;
+  removeAllEquipment(): void;
+  listEquipment(): void;
 }
 
 declare global {
@@ -220,7 +233,14 @@ export class DebugManager {
                     : 1;
         const spawnX = player.x + Phaser.Math.Between(-30, 30);
         const spawnY = player.y + Phaser.Math.Between(-30, 30);
-        lootSystem.spawnLoot(spawnX, spawnY, lootType, value, rarity);
+        const loot = lootSystem.spawnLoot(spawnX, spawnY, lootType, value, rarity);
+        // Generate equipmentData for equipment loot so it's collectible
+        if (lootType === LootType.equipment && this.scene.equipmentManager) {
+          const eqRarity = (rarity && rarity in EQUIPMENT_RARITY_DEFS ? rarity : 'blue') as import('../config').EquipmentRarity;
+          const eqSlot = EQUIPMENT_SLOTS[Math.floor(Math.random() * EQUIPMENT_SLOTS.length)] as import('../config').EquipmentSlot;
+          const floor = this.scene.floorManager?.currentFloor ?? 1;
+          loot.equipmentData = this.scene.equipmentManager.generateEquipment(eqSlot, eqRarity, floor);
+        }
         console.log(`[Debug] spawnLoot: ${lootType}${rarity ? ` (${rarity})` : ''} at (${spawnX.toFixed(0)}, ${spawnY.toFixed(0)})`);
       },
       teleport: (x: number, y: number) => {
@@ -256,18 +276,12 @@ export class DebugManager {
         const floor = Math.max(1, n);
         const player = this.scene.player;
         if (!player) { console.log('[Debug] setFloor: player not ready'); return; }
-        const runState = {
-          statsManagerState: this.scene.statsManager.exportState(),
-          playerHp: player.hp,
-          playerMp: player.mp,
-          playerGold: player.gold,
-          playerMaterials: { ...player.materials },
+        const runState = this.scene.buildRunState({
           floorManagerState: {
             currentFloor: floor,
             highestFloor: Math.max(this.scene.floorManager.highestFloor, floor),
           },
-          playerSkills: this.scene.skillManager.exportState().skills,
-        };
+        });
         console.log(`[Debug] setFloor: jumping to floor ${floor}`);
         this.scene.scene.restart(runState);
       },
@@ -331,6 +345,58 @@ export class DebugManager {
         const cd = sm.getSlotCooldownRemaining(slot);
         console.log(`[Debug] getSkillCooldown(slot ${slot}): ${cd.toFixed(0)}ms remaining`);
         return cd;
+      },
+
+      // ---- Equipment commands
+      giveEquipment: (slot?: string, rarity?: string, subtype?: string) => {
+        const em = this.scene.equipmentManager;
+        if (!em) { console.log('[Debug] giveEquipment: equipmentManager not ready'); return; }
+
+        const targetSlot = (slot && EQUIPMENT_SLOTS.includes(slot as EquipmentSlot) ? slot : EQUIPMENT_SLOTS[Math.floor(Math.random() * EQUIPMENT_SLOTS.length)]) as EquipmentSlot;
+        const targetRarity = (rarity && rarity in EQUIPMENT_RARITY_DEFS ? rarity : 'blue') as EquipmentRarity;
+        const floor = this.scene.floorManager?.currentFloor ?? 1;
+
+        const item = em.generateEquipment(targetSlot, targetRarity, floor);
+        if (subtype && targetSlot === 'weapon') {
+          (item as EquipmentItem & { subtype: string }).subtype = subtype;
+        }
+        const old = em.equip(item);
+        console.log(`[Debug] giveEquipment: equipped ${item.rarity} ${item.name} (id:${item.id}). Replaced: ${old?.name ?? 'none'}`);
+        console.table(item.stats);
+      },
+
+      removeEquipment: (slot: string) => {
+        const em = this.scene.equipmentManager;
+        if (!em) { console.log('[Debug] removeEquipment: equipmentManager not ready'); return; }
+        if (!EQUIPMENT_SLOTS.includes(slot as EquipmentSlot)) {
+          console.log(`[Debug] removeEquipment: invalid slot "${slot}". Use: ${EQUIPMENT_SLOTS.join(', ')}`);
+          return;
+        }
+        const old = em.unequip(slot as EquipmentSlot);
+        console.log(`[Debug] removeEquipment(${slot}): removed ${old?.name ?? 'nothing'}`);
+      },
+
+      removeAllEquipment: () => {
+        const em = this.scene.equipmentManager;
+        if (!em) { console.log('[Debug] removeAllEquipment: equipmentManager not ready'); return; }
+        for (const slot of EQUIPMENT_SLOTS) {
+          em.unequip(slot);
+        }
+        console.log('[Debug] removeAllEquipment: all slots cleared');
+      },
+
+      listEquipment: () => {
+        const em = this.scene.equipmentManager;
+        if (!em) { console.log('[Debug] listEquipment: equipmentManager not ready'); return; }
+        for (const slot of EQUIPMENT_SLOTS) {
+          const item = em.getEquipped(slot);
+          if (item) {
+            console.log(`[${slot}] ${item.rarity} ${item.name} (${item.subtype})`);
+            console.table(item.stats);
+          } else {
+            console.log(`[${slot}] empty`);
+          }
+        }
       },
     };
   }
@@ -398,6 +464,17 @@ export class DebugManager {
           ? this.scene.lootGroup.countActive(true)
           : 0,
       },
+      equipment: (() => {
+        const em = this.scene.equipmentManager;
+        if (!em) return { weapon: null, armor: null, helmet: null, accessory: null };
+        const all = em.getAllEquipped();
+        return {
+          weapon: all.weapon ? { name: all.weapon.name, rarity: all.weapon.rarity, subtype: all.weapon.subtype, stats: all.weapon.stats as Record<string, number> } : null,
+          armor: all.armor ? { name: all.armor.name, rarity: all.armor.rarity, stats: all.armor.stats as Record<string, number> } : null,
+          helmet: all.helmet ? { name: all.helmet.name, rarity: all.helmet.rarity, stats: all.helmet.stats as Record<string, number> } : null,
+          accessory: all.accessory ? { name: all.accessory.name, rarity: all.accessory.rarity, stats: all.accessory.stats as Record<string, number> } : null,
+        };
+      })(),
       performance: {
         fps: this.scene.game.loop.actualFps,
         bodies: this.scene.physics.world.bodies.size + this.scene.physics.world.staticBodies.size,
