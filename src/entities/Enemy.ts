@@ -30,14 +30,14 @@ export class Enemy extends Phaser.GameObjects.Image {
 
   private knockbackTimer: number = 0;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, roomIndex: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, roomIndex: number, hpScale = 1, atkScale = 1) {
     super(scene, x, y, 'enemy-spider');
     this.setOrigin(0.5, 0.5);
 
-    this.hp = GAME_CONFIG.SPIDER_HP;
-    this.maxHp = GAME_CONFIG.SPIDER_HP;
+    this.hp = Math.round(GAME_CONFIG.SPIDER_HP * hpScale);
+    this.maxHp = Math.round(GAME_CONFIG.SPIDER_HP * hpScale);
     this.speed = GAME_CONFIG.SPIDER_SPEED;
-    this.attackDamage = GAME_CONFIG.SPIDER_ATTACK;
+    this.attackDamage = Math.round(GAME_CONFIG.SPIDER_ATTACK * atkScale);
     this.attackCooldown = GAME_CONFIG.SPIDER_ATTACK_COOLDOWN;
     this.attackRange = GAME_CONFIG.SPIDER_ATTACK_RANGE;
     this.roomIndex = roomIndex;
