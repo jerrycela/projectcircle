@@ -48,14 +48,15 @@ New states: IDLE → IN_RANGE → ARMING → OPEN → COOLDOWN → IDLE
 
 ## Skill Pick Panel
 
-- 3 random skill cards, pick 1
+- Draw `min(3, poolSize)` skill cards from eligible pool. Each draw within the same round is unique (no duplicates).
 - 2 skill slots; if full: picking owned skill = upgrade, new skill = replace (slot selection UI)
-- 1 free reroll, subsequent rerolls cost 20G flat (not escalating). Reroll button disabled + dimmed if gold < 20.
-- Rerolled cards are drawn from remaining pool; duplicates with current 3 cards are allowed (pool is small).
+- 1 free reroll, subsequent rerolls cost `config.ALTAR_REROLL_COST` (default 20G, flat, not escalating). Reroll button disabled + dimmed if gold insufficient.
 - Skip button available (skips skill phase, proceeds to shop)
 - Only appears on first altar activation per floor (gated by `skillOffered` flag)
+- `skillOffered` is per altar instance, not persisted in RunState. Each floor creates a new Altar with `skillOffered = false`.
 - After selection/skip, auto-transitions to upgrade shop (instant cut, no animation)
-- If skill pool is empty (all skills learned at max level), skip skill phase entirely, go straight to shop
+- If skill pool is empty (all skills learned at max level), skip skill phase entirely, go straight to shop. `skillOffered` set to true.
+- Replaced skills are permanently lost. If the same skill is learned again later, it starts at Lv.1.
 
 ### Skill Level System
 
@@ -69,7 +70,7 @@ Add `level: number` to SkillSlot (default 1 when learned). Each skill has max le
 
 Scaling rule: `damageMultiplier += 0.3 per level` for Whirlwind/Arcane Bolt, `+0.2` for Shadow Dash. Secondary stat (radius/distance/pierce) increases by fixed amount per level as shown.
 
-Implementation: add `levelScaling` array to `SkillDefinition` in config.ts. `SkillSlot` gains `level: number`. `SkillManager.upgradeSkill(type)` increments level (capped at 3). `calcSkillDamage` and `executeSkill` read current level to pick multiplier/params.
+Implementation: add `levelScaling` array to `SkillDefinition` in config.ts. `SkillSlot` gains `level: number`. `SkillManager.upgradeSkill(type)` increments level (capped at 3). `calcSkillDamage` and `executeSkill` read current level to pick multiplier/params. `importState` must default missing `level` to `1` for backward compatibility.
 
 Skill card in altar UI shows current level if owned: "Whirlwind Lv.1 → Lv.2".
 
@@ -87,7 +88,7 @@ Skill panel opens (3 random cards)
   └─ Skip → skillOffered=true → shop
 ```
 
-Skill pool for card draw: all skills where either (a) player doesn't own it, or (b) player owns it at level < max. Maxed skills are excluded.
+Skill pool for card draw: all skills where either (a) player doesn't own it, or (b) player owns it at level < max. Maxed skills are excluded. If pool has 1-2 skills, show only that many cards. If pool is empty, skip skill phase.
 
 ## Upgrade Shop UI
 
@@ -164,7 +165,7 @@ Cost formula: `baseCost + currentLevel × costScale`
 
 1. **Altar.ts** — Replace CONSUMED with COOLDOWN, add `skillOffered` flag, COOLDOWN→IDLE on leave range
 2. **UpgradePanel.ts** — Major rewrite: two-phase flow (skill pick + shop grid), new grid layout, destroy cleanup
-3. **config.ts** — Add `levelScaling` to SkillDefinition, add reroll cost constant
+3. **config.ts** — Add `levelScaling` to SkillDefinition, add `ALTAR_REROLL_COST` constant
 4. **SkillManager.ts** — Add `level` to SkillSlot, add `upgradeSkill()`, update `calcSkillDamage`/`executeSkill` for level scaling, update `exportState`/`importState`
 5. **StatsManager.ts** — No changes (level tracking already supports this)
 6. **GameScene.ts** — Update altar-activated handler for two-phase flow
@@ -205,6 +206,8 @@ Cost formula: `baseCost + currentLevel × costScale`
 | 16 | Skill upgrade works | Own whirlwind Lv1, pick whirlwind from altar → verify Lv2, damage increased |
 | 17 | Reroll costs 20G after first free | Use free reroll (new cards), then verify 20G deducted on second reroll |
 | 18 | Session cleanup on teardown | Force scene restart during open panel → verify no stuck lock state |
+| 19 | New floor resets skill phase | `__debug.setFloor(n+1)`, visit altar → skill panel appears again |
+| 20 | Pool < 3 shows fewer cards | Max 2 skills + max levels on owned → verify panel shows 1-2 cards without error |
 
 ## Out of Scope
 
