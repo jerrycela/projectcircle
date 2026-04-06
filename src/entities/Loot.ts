@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { EquipmentItem } from '../config';
 
 export const LootType = {
   gold: 'gold',
@@ -24,6 +25,7 @@ export class Loot extends Phaser.GameObjects.Image {
   public lootType: LootType;
   public value: number;
   public rarity?: string;
+  public equipmentData?: EquipmentItem;
 
   private bobTween?: Phaser.Tweens.Tween;
 
@@ -74,6 +76,7 @@ export class Loot extends Phaser.GameObjects.Image {
   collect(): void {
     this.bobTween?.destroy();
     this.bobTween = undefined;
+    this.equipmentData = undefined;
     this.setActive(false);
     this.setVisible(false);
   }

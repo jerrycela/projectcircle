@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
-import { GAME_CONFIG } from '../config';
+import { GAME_CONFIG, EQUIPMENT_SLOTS } from '../config';
 import { Loot, LootType } from '../entities/Loot';
 import type { LootType as LootTypeT } from '../entities/Loot';
 import type { Player } from '../entities/Player';
 import type { Enemy } from '../entities/Enemy';
 import EventBus from './EventBus';
+import type { EquipmentManager } from './EquipmentManager';
 
 const EQUIPMENT_RARITIES = ['white', 'green', 'blue', 'purple'] as const;
 type EquipmentRarity = typeof EQUIPMENT_RARITIES[number];
@@ -38,11 +39,13 @@ export class LootSystem {
 
   // Track loot items currently being pulled to avoid duplicate tweens
   private pulling: Set<Loot> = new Set();
+  private equipmentManager?: EquipmentManager;
 
-  constructor(scene: Phaser.Scene, player: Player, lootGroup: Phaser.GameObjects.Group) {
+  constructor(scene: Phaser.Scene, player: Player, lootGroup: Phaser.GameObjects.Group, equipmentManager?: EquipmentManager) {
     this.scene = scene;
     this.player = player;
     this.lootGroup = lootGroup;
+    this.equipmentManager = equipmentManager;
 
     EventBus.on('enemy-killed', this.onEnemyKilled, this);
   }
@@ -51,7 +54,6 @@ export class LootSystem {
     const baseX = enemy.x;
     const baseY = enemy.y;
 
-    // Roll drop table
     for (const entry of DROP_TABLE) {
       if (Math.random() < entry.chance) {
         const value = entry.type === LootType.gold
@@ -66,11 +68,16 @@ export class LootSystem {
     }
 
     // Equipment roll (3%)
-    if (Math.random() < 0.03) {
+    if (Math.random() < 0.03 && this.equipmentManager) {
       const ox = Phaser.Math.Between(-10, 10);
       const oy = Phaser.Math.Between(-10, 10);
       const rarity = rollEquipmentRarity();
-      this.spawnLoot(baseX + ox, baseY + oy, LootType.equipment, 0, rarity);
+      const slot = EQUIPMENT_SLOTS[Math.floor(Math.random() * EQUIPMENT_SLOTS.length)] as import('../config').EquipmentSlot;
+      const floor = (this.scene as unknown as { floorManager?: { currentFloor: number } }).floorManager?.currentFloor ?? 1;
+      const item = this.equipmentManager.generateEquipment(slot, rarity, floor);
+
+      const loot = this.spawnLoot(baseX + ox, baseY + oy, LootType.equipment, 0, rarity);
+      loot.equipmentData = item;
     }
   }
 
@@ -128,6 +135,14 @@ export class LootSystem {
       const dy = py - loot.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
+      // Equipment: no magnet, use overlap pickup instead
+      if (loot.lootType === LootType.equipment) {
+        if (dist < 24 && loot.equipmentData) {
+          EventBus.emit('equipment-pickup', loot.equipmentData, loot);
+        }
+        continue;
+      }
+
       if (dist < range) {
         this.pulling.add(loot);
 
@@ -183,8 +198,7 @@ export class LootSystem {
         break;
 
       case LootType.equipment:
-        console.log(`[LootSystem] Equipment found! Rarity: ${loot.rarity ?? 'white'}`);
-        EventBus.emit('player-equipment-found', { rarity: loot.rarity ?? 'white' });
+        // Handled by equipment-pickup event in update()
         break;
     }
   }
