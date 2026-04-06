@@ -243,6 +243,8 @@ export class SkillButton {
     if (this.currentState === 'READY' && this.currentMpEnough) {
       this.isPressed = true;
       this.bgGraphics.setAlpha(0.9);
+      this.bgGraphics.setScale(0.9);
+      this.iconGraphics.setScale(0.9);
       this.redraw();
       EventBus.emit('skill-button-pressed', this.slotIndex);
     } else if (this.currentState !== 'EMPTY') {
@@ -255,6 +257,8 @@ export class SkillButton {
     if (this.isPressed) {
       this.isPressed = false;
       this.bgGraphics.setAlpha(1.0);
+      this.bgGraphics.setScale(1.0);
+      this.iconGraphics.setScale(1.0);
       this.redraw();
     }
   }
