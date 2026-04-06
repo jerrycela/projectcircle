@@ -225,6 +225,9 @@ export class GameScene extends Phaser.Scene {
         return;
       }
     }
+
+    // Player is in a corridor — not in any room
+    this.currentPlayerRoom = null;
   }
 
   private updateEnemyAI(): void {
@@ -256,6 +259,7 @@ export class GameScene extends Phaser.Scene {
   spawnEnemiesInRoom(roomIndex: number): void {
     const room = this.rooms[roomIndex];
     if (!room) return;
+    if (room.state === RoomState.ALTAR) return;
 
     const tileSize = GAME_CONFIG.TILE_SIZE;
     const count = Phaser.Math.Between(

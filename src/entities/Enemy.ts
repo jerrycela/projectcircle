@@ -4,6 +4,7 @@ import type { Player } from './Player';
 import type { Room } from '../systems/DungeonGenerator';
 import { RoomState } from '../systems/DungeonGenerator';
 import EventBus from '../systems/EventBus';
+import type { GameScene } from '../scenes/GameScene';
 
 export const EnemyState = {
   IDLE: 'IDLE',
@@ -77,6 +78,17 @@ export class Enemy extends Phaser.GameObjects.Image {
       this.state = EnemyState.IDLE;
       body.setVelocity(0, 0);
       return;
+    }
+
+    // Disengage if player is in an ALTAR room (enemies don't follow into altars)
+    const playerRoomIndex = (this.scene as GameScene).currentPlayerRoom;
+    if (playerRoomIndex !== null) {
+      const playerRoom = rooms[playerRoomIndex];
+      if (playerRoom && playerRoom.state === RoomState.ALTAR) {
+        this.state = EnemyState.IDLE;
+        body.setVelocity(0, 0);
+        return;
+      }
     }
 
     // Room is ACTIVE
