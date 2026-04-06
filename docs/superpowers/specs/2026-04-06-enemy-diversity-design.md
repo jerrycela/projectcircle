@@ -152,7 +152,7 @@ Each AI type only uses its relevant subset. The `updateAI` method branches by `c
 
 ## Damage API Change
 
-`Enemy.takeDamage` signature changes from `(amount, knockbackX, knockbackY)` to `(amount, sourceX, sourceY, knockbackX, knockbackY)`. The `sourceX/sourceY` is the attacker's position, used by Shield AI to determine frontal arc. CombatSystem already has player position available, so this is a trivial change.
+`Enemy.takeDamage` signature changes from `(amount, knockbackX, knockbackY)` to `(amount, knockbackX, knockbackY, sourceX?: number, sourceY?: number)`. The optional `sourceX/sourceY` is the attacker's position, used by Shield AI to determine frontal arc. When undefined (e.g., environmental damage or future non-directional sources), shield reduction does NOT apply. CombatSystem already has player position available, so this is a trivial change.
 
 ## Spawn System
 
