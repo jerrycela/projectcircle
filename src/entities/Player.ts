@@ -48,6 +48,14 @@ export class Player extends Phaser.GameObjects.Container {
     body.setSize(32, 32);
     body.setOffset(-16, -16);
     body.setCollideWorldBounds(true);
+
+    // Listen for weapon type changes
+    EventBus.on('weapon-changed', (subtype: string) => {
+      const textureKey = `weapon-${subtype}`;
+      if (this.scene.textures.exists(textureKey)) {
+        this.weaponSprite.setTexture(textureKey);
+      }
+    });
   }
 
   get isMoving(): boolean {
