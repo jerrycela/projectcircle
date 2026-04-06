@@ -183,6 +183,19 @@ function tryGenerate(roomCount: number): DungeonData | null {
   return { grid, rooms };
 }
 
+function assignAltarRoom(rooms: Room[]): void {
+  if (rooms.length < 3) {
+    console.log('[DungeonGenerator] Too few rooms for altar, skipping');
+    return;
+  }
+
+  // Pick a random non-spawn room (index > 0) for the altar
+  const candidates = rooms.slice(1);
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  pick.state = RoomState.ALTAR;
+  console.log(`[DungeonGenerator] Altar room assigned: room ${rooms.indexOf(pick)}`);
+}
+
 export function generate(): DungeonData {
   const minRoomCount = GAME_CONFIG.ROOM_COUNT.min;
   const maxRoomCount = GAME_CONFIG.ROOM_COUNT.max;
@@ -192,6 +205,7 @@ export function generate(): DungeonData {
       const result = tryGenerate(roomCount);
       if (result !== null) {
         console.log(`[DungeonGenerator] Generated dungeon with ${result.rooms.length} rooms (target: ${roomCount})`);
+        assignAltarRoom(result.rooms);
         return result;
       }
     }
