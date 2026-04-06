@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config';
 import EventBus from '../systems/EventBus';
+import type { StatsManager } from '../systems/StatsManager';
 
 export class Player extends Phaser.GameObjects.Container {
   public hp: number;
@@ -11,6 +12,7 @@ export class Player extends Phaser.GameObjects.Container {
   public gold: number = 0;
   public materials: { wood: number; ore: number; cloth: number } = { wood: 0, ore: 0, cloth: 0 };
   public invincible: boolean = false;
+  public statsManager!: StatsManager;
 
   declare body: Phaser.Physics.Arcade.Body;
 
@@ -19,14 +21,15 @@ export class Player extends Phaser.GameObjects.Container {
   private baseSprite: Phaser.GameObjects.Image;
   private weaponSprite: Phaser.GameObjects.Image;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, statsManager: StatsManager) {
     super(scene, x, y);
 
-    this.hp = GAME_CONFIG.PLAYER_HP;
-    this.maxHp = GAME_CONFIG.PLAYER_HP;
+    this.statsManager = statsManager;
+    this.hp = statsManager.getStat('maxHp');
+    this.maxHp = statsManager.getStat('maxHp');
     this.mp = GAME_CONFIG.PLAYER_MP;
     this.maxMp = GAME_CONFIG.PLAYER_MP;
-    this.speed = GAME_CONFIG.PLAYER_SPEED;
+    this.speed = statsManager.getStat('moveSpeed');
 
     // Visual children — no physics on these
     this.baseSprite = scene.add.image(0, 0, 'player-body');
@@ -70,7 +73,8 @@ export class Player extends Phaser.GameObjects.Container {
     }
 
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setVelocity(nx * this.speed, ny * this.speed);
+    const speed = this.statsManager.getStat('moveSpeed');
+    body.setVelocity(nx * speed, ny * speed);
 
     // Flip container based on horizontal direction
     if (dirX !== 0) {
@@ -87,7 +91,9 @@ export class Player extends Phaser.GameObjects.Container {
     if (this.invincible) return;
     if (!this.active) return;
 
-    this.hp = Math.max(0, this.hp - amount);
+    const armor = this.statsManager.getStat('armor');
+    const reduced = Math.max(1, amount - armor);
+    this.hp = Math.max(0, this.hp - reduced);
 
     // Camera flash red to signal damage
     EventBus.emit('player-hit');

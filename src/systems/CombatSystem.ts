@@ -3,14 +3,17 @@ import { GAME_CONFIG } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import type { Enemy } from '../entities/Enemy';
 import EventBus from './EventBus';
+import type { StatsManager } from './StatsManager';
 
 export class CombatSystem {
   private scene: GameScene;
+  private statsManager: StatsManager;
   private lastAttackTime: number = 0;
   private lastScanTime: number = 0;
 
-  constructor(scene: GameScene) {
+  constructor(scene: GameScene, statsManager: StatsManager) {
     this.scene = scene;
+    this.statsManager = statsManager;
 
     // Camera shake on player hit (no flash for normal attacks, reserved for skills)
     EventBus.on('player-hit', () => {
@@ -73,11 +76,14 @@ export class CombatSystem {
 
   private executePlayerAttack(player: Phaser.GameObjects.Container, enemy: Enemy): void {
     // Calculate damage
-    let damage = Phaser.Math.Between(GAME_CONFIG.PLAYER_ATTACK.min, GAME_CONFIG.PLAYER_ATTACK.max);
+    let damage = Phaser.Math.Between(
+      this.statsManager.getStat('attackMin'),
+      this.statsManager.getStat('attackMax'),
+    );
     let isCrit = false;
 
-    if (Math.random() < GAME_CONFIG.PLAYER_CRIT_CHANCE) {
-      damage = Math.floor(damage * GAME_CONFIG.PLAYER_CRIT_DAMAGE);
+    if (Math.random() < this.statsManager.getStat('critChance')) {
+      damage = Math.floor(damage * this.statsManager.getStat('critDamage'));
       isCrit = true;
     }
 

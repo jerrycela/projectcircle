@@ -9,11 +9,15 @@ import { Enemy } from '../entities/Enemy';
 import EventBus from '../systems/EventBus';
 import { CombatSystem } from '../systems/CombatSystem';
 import { LootSystem } from '../systems/LootSystem';
+import { StatsManager } from '../systems/StatsManager';
 
 export class GameScene extends Phaser.Scene {
   private debugManager?: DebugManager;
   public combatSystem!: CombatSystem;
   public lootSystem!: LootSystem;
+  public statsManager!: StatsManager;
+  public gameplayLocked: boolean = false;
+  private recoveryAccum: number = 0;
 
   public rooms: Room[] = [];
   public grid: number[][] = [];
@@ -83,7 +87,8 @@ export class GameScene extends Phaser.Scene {
     const firstRoom = rooms[0];
     const spawnX = firstRoom.centerX * tileSize + tileSize / 2;
     const spawnY = firstRoom.centerY * tileSize + tileSize / 2;
-    this.player = new Player(this, spawnX, spawnY);
+    this.statsManager = new StatsManager();
+    this.player = new Player(this, spawnX, spawnY, this.statsManager);
 
     // Player vs walls collider
     this.physics.add.collider(this.player, this.wallGroup);
@@ -129,11 +134,20 @@ export class GameScene extends Phaser.Scene {
     this.lootSystem = new LootSystem(this, this.player, this.lootGroup);
 
     // Combat system
-    this.combatSystem = new CombatSystem(this);
+    this.combatSystem = new CombatSystem(this, this.statsManager);
 
     // Player death handler
     EventBus.on('player-died', () => {
       this.combatSystem.onPlayerDied();
+    });
+
+    EventBus.on('gameplay-lock', (locked: boolean) => {
+      this.gameplayLocked = locked;
+      if (locked) {
+        this.physics.pause();
+      } else {
+        this.physics.resume();
+      }
     });
 
     // Register shutdown handler so Phaser calls it on scene stop
@@ -151,15 +165,31 @@ export class GameScene extends Phaser.Scene {
     EventBus.off('joystick-move');
     EventBus.off('joystick-stop');
     EventBus.off('player-died');
+    EventBus.off('gameplay-lock');
   }
 
   update(time: number, delta: number): void {
+    // Gameplay lock — skip ALL game logic including regen
+    if (this.gameplayLocked) return;
+
     // MP regeneration
     if (this.player && this.player.active) {
       this.player.mp = Math.min(
         this.player.mp + GAME_CONFIG.PLAYER_MP_REGEN * (delta / 1000),
         this.player.maxMp,
       );
+    }
+
+    // HP recovery (accumulator pattern to keep HP as integer)
+    const recovery = this.statsManager.getStat('recovery');
+    if (recovery > 0 && this.player.hp < this.player.maxHp) {
+      this.recoveryAccum += recovery * (delta / 1000);
+      if (this.recoveryAccum >= 1) {
+        const heal = Math.floor(this.recoveryAccum);
+        this.recoveryAccum -= heal;
+        this.player.hp = Math.min(this.player.hp + heal, this.player.maxHp);
+        EventBus.emit('player-hp-changed', this.player.hp, this.player.maxHp);
+      }
     }
 
     this.handleInput();
