@@ -33,6 +33,47 @@ export class BootScene extends Phaser.Scene {
     enemySpider.generateTexture('enemy-spider', 30, 30);
     enemySpider.destroy();
 
+    // enemy-goblin: 28x28 green triangle
+    const enemyGoblin = this.make.graphics({ x: 0, y: 0 }, false);
+    enemyGoblin.fillStyle(0x228b22);
+    enemyGoblin.fillTriangle(14, 0, 28, 28, 0, 28);
+    enemyGoblin.generateTexture('enemy-goblin', 28, 28);
+    enemyGoblin.destroy();
+
+    // enemy-bat: 24x24 purple diamond
+    const enemyBat = this.make.graphics({ x: 0, y: 0 }, false);
+    enemyBat.fillStyle(0x6a0dad);
+    enemyBat.fillTriangle(12, 0, 24, 12, 12, 24);
+    enemyBat.fillTriangle(12, 0, 0, 12, 12, 24);
+    enemyBat.generateTexture('enemy-bat', 24, 24);
+    enemyBat.destroy();
+
+    // enemy-skel-sword: 32x32 light gray square
+    const enemySkelSword = this.make.graphics({ x: 0, y: 0 }, false);
+    enemySkelSword.fillStyle(0xcccccc);
+    enemySkelSword.fillRect(0, 0, 32, 32);
+    enemySkelSword.generateTexture('enemy-skel-sword', 32, 32);
+    enemySkelSword.destroy();
+
+    // enemy-skel-shield: 34x34 gray square with front line
+    const enemySkelShield = this.make.graphics({ x: 0, y: 0 }, false);
+    enemySkelShield.fillStyle(0xaaaaaa);
+    enemySkelShield.fillRect(0, 0, 34, 34);
+    enemySkelShield.lineStyle(3, 0xffffff);
+    enemySkelShield.lineBetween(0, 0, 0, 34);
+    enemySkelShield.generateTexture('enemy-skel-shield', 34, 34);
+    enemySkelShield.destroy();
+
+    // enemy-skel-summoner: 30x30 light purple circle + cross
+    const enemySkelSummoner = this.make.graphics({ x: 0, y: 0 }, false);
+    enemySkelSummoner.fillStyle(0x9966cc);
+    enemySkelSummoner.fillCircle(15, 15, 15);
+    enemySkelSummoner.lineStyle(2, 0xffffff);
+    enemySkelSummoner.lineBetween(15, 5, 15, 25);
+    enemySkelSummoner.lineBetween(5, 15, 25, 15);
+    enemySkelSummoner.generateTexture('enemy-skel-summoner', 30, 30);
+    enemySkelSummoner.destroy();
+
     // floor-tile: 64x64 dark gray filled rectangle
     const floorTile = this.make.graphics({ x: 0, y: 0 }, false);
     floorTile.fillStyle(0x2c2c2c);
