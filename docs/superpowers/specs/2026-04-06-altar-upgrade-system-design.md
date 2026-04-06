@@ -14,45 +14,71 @@ Kill enemies → Collect gold → Find altar room → Choose 1 of 3 upgrades →
 
 ### 1. StatsManager (new: `src/systems/StatsManager.ts`)
 
-Centralized player stat management. Replaces raw properties on Player with computed values that account for base stats + upgrade bonuses.
+Centralized player stat management. Owned by GameScene, injected into Player on creation. New instance created on each game restart (no global singleton).
 
 ```
 StatsManager {
-  baseStats: { attack, armor, critChance, critDamage, recovery, moveSpeed }
-  bonuses: { attack, armor, critChance, critDamage, recovery, moveSpeed }
-  
+  baseStats: { attackMin, attackMax, armor, critChance, critDamage, recovery, moveSpeed, maxHp }
+  bonuses:   { attackMin, attackMax, armor, critChance, critDamage, recovery, moveSpeed, maxHp }
+  levels:    { attack, armor, critDamage, recovery, moveSpeed, maxHp }  // track upgrade levels per type
+
   getStat(key) → base + bonus
   addBonus(key, amount)
-  reset() → clear all bonuses (on new run)
+  getLevel(upgradeType) → current level
+  incrementLevel(upgradeType)
 }
 ```
 
-- Player reads stats from StatsManager instead of GAME_CONFIG directly
-- CombatSystem uses `statsManager.getStat('attack')` for damage calc
-- Player.speed uses `statsManager.getStat('moveSpeed')`
+- GameScene creates StatsManager in `create()`, passes to Player and CombatSystem
+- Player reads `maxHp`, `moveSpeed` from StatsManager
+- CombatSystem reads `attackMin`, `attackMax`, `critChance`, `critDamage` from StatsManager
+- Attack bonus is a flat offset applied to both min and max: `damage = Phaser.Math.Between(getStat('attackMin'), getStat('attackMax'))`
+- On game restart: new GameScene creates new StatsManager (fresh state)
 
 ### 2. Altar Entity (new: `src/entities/Altar.ts`)
 
 A static game object placed in one room per floor.
 
 - Visual: white bordered circle (placeholder), 48x48
-- Placed at center of a designated "altar room" (not the spawn room, not rooms with enemies)
-- Interaction: player walks within 60px → show "Upgrade" prompt text above altar
-- Activation: player stops within range for 0.5s → open upgrade panel
-- One-time use per floor (altar dims after use)
+- Placed at center of a designated "altar room"
+
+**State machine:**
+```
+IDLE → IN_RANGE → ARMING(500ms) → OPEN → CONSUMED
+```
+
+| Transition | Condition |
+|------------|-----------|
+| IDLE → IN_RANGE | player distance < 60px |
+| IN_RANGE → IDLE | player distance >= 60px |
+| IN_RANGE → ARMING | player velocity magnitude < 5 (effectively stopped) |
+| ARMING → IN_RANGE | player velocity magnitude >= 5 OR player distance >= 60px |
+| ARMING → OPEN | 500ms timer completes |
+| OPEN → CONSUMED | panel closes (upgrade selected or skipped) |
+
+- IN_RANGE: show "Upgrade" prompt text above altar
+- ARMING: prompt text pulses (alpha oscillation)
+- OPEN: emit `'altar-activated'` event, physics pauses
+- CONSUMED: altar alpha 0.3, no further interaction
 
 ### 3. Altar Room in Dungeon Generator
 
 Modify `DungeonGenerator.generate()`:
-- After placing rooms, pick one non-spawn room and mark it as `ALTAR` state
-- This room spawns no enemies
-- Altar entity is placed at room center
+- After placing rooms, pick one non-spawn room (index > 0) and set initial state to `ALTAR`
+- **Fallback**: if total rooms < 3, skip altar placement entirely (no altar this floor)
+- ALTAR rooms are excluded from enemy spawning
 
 New room state: `RoomState.ALTAR`
 
+**Cross-system contract for ALTAR state:**
+- `GameScene.detectPlayerRoom()`: entering ALTAR room does NOT change state to ACTIVE, no enemy spawn
+- `GameScene.checkRoomClearing()`: ALTAR rooms are skipped (never participate in cleared check)
+- `GameScene.spawnEnemiesInRoom()`: early return if room state is ALTAR
+- `Enemy.updateAI()`: enemies never bind to or chase into ALTAR room index
+
 ### 4. Upgrade Panel (new: `src/ui/UpgradePanel.ts`, rendered in UIScene)
 
-Full-screen overlay triggered when player activates altar.
+Full-screen overlay triggered when altar emits `'altar-activated'`.
 
 **Layout (portrait 450x800):**
 - Background: black overlay alpha 0.7
@@ -62,24 +88,32 @@ Full-screen overlay triggered when player activates altar.
 - "Skip" button at bottom (close without spending)
 
 **Card content:**
-Each activation generates 3 random upgrades from the pool (no duplicates):
+Each activation generates 3 random upgrades from the available pool (no duplicates, max-level upgrades excluded). If fewer than 3 available, show only what's available.
 
-| Upgrade | Effect per level | Cost formula | Max level |
-|---------|-----------------|--------------|-----------|
-| Attack+ | +4 attack (min & max) | 20 + level * 15 | 10 |
-| Armor+ | +3 armor | 15 + level * 10 | 10 |
-| Crit Damage+ | +10% crit damage | 25 + level * 20 | 5 |
-| Recovery+ | +1 HP/s regen | 20 + level * 15 | 5 |
-| Move Speed+ | +15 speed | 30 + level * 20 | 3 |
-| Max HP+ | +30 max HP | 15 + level * 10 | 10 |
+| Upgrade | Effect per level | Cost = `base + currentLevel * scale` | Max level |
+|---------|-----------------|--------------------------------------|-----------|
+| Attack+ | +4 to attackMin AND attackMax | 20 + currentLevel * 15 | 10 |
+| Armor+ | +3 armor | 15 + currentLevel * 10 | 10 |
+| Crit Damage+ | +0.10 crit damage multiplier | 25 + currentLevel * 20 | 5 |
+| Recovery+ | +1 HP/s regen | 20 + currentLevel * 15 | 5 |
+| Move Speed+ | +15 speed | 30 + currentLevel * 20 | 3 |
+| Max HP+ | +30 max HP (and heal +30 current HP) | 15 + currentLevel * 10 | 10 |
+
+- `currentLevel` = level BEFORE purchase (0 = never bought, cost = base)
+- Max-level upgrades are removed from the random pool
+
+**Input locking:**
+- On panel open: emit `'ui-input-lock'` → Joystick calls `resetJoystick()` and ignores all pointer events while locked
+- On panel close: emit `'ui-input-unlock'` → Joystick resumes normal operation
+- UpgradePanel's background rect is interactive and consumes all pointer events (prevents click-through)
 
 **Interaction:**
-1. Physics pauses on panel open
-2. Player taps a card → check gold sufficient → deduct gold → apply bonus via StatsManager → close panel
-3. If gold insufficient: card appears dimmed, tap shows "Not enough gold" flash text
+1. Panel open: physics pauses, input locked
+2. Tap card → check gold sufficient → deduct gold → apply bonus via StatsManager → show floating "+4 ATK" confirmation text → close panel
+3. If gold insufficient: card appears dimmed (alpha 0.5), tap shows "Not enough gold" flash text (no action)
 4. Skip button closes panel without spending
-5. Physics resumes on panel close
-6. Altar becomes inactive (visual: alpha 0.3, no more interaction)
+5. Panel close: physics resumes, input unlocked
+6. Altar transitions to CONSUMED state
 
 ### 5. Recovery System
 
@@ -99,36 +133,37 @@ Add damage reduction in Player.takeDamage():
 
 | File | Change |
 |------|--------|
-| `src/systems/StatsManager.ts` | **New** — centralized stat management |
-| `src/entities/Altar.ts` | **New** — altar game object |
-| `src/ui/UpgradePanel.ts` | **New** — upgrade card UI |
-| `src/systems/DungeonGenerator.ts` | Add ALTAR room state + altar room selection |
-| `src/scenes/GameScene.ts` | Integrate StatsManager, spawn altar, handle recovery |
+| `src/systems/StatsManager.ts` | **New** — centralized stat management with level tracking |
+| `src/entities/Altar.ts` | **New** — altar game object with state machine |
+| `src/ui/UpgradePanel.ts` | **New** — upgrade card UI with input locking |
+| `src/systems/DungeonGenerator.ts` | Add ALTAR room state + altar room selection + fallback |
+| `src/scenes/GameScene.ts` | Create StatsManager, spawn altar, recovery regen, ALTAR room handling |
 | `src/scenes/BootScene.ts` | Generate altar placeholder texture |
-| `src/scenes/UIScene.ts` | Mount UpgradePanel, listen for altar activation |
-| `src/entities/Player.ts` | Use StatsManager for speed, add armor reduction |
-| `src/systems/CombatSystem.ts` | Use StatsManager for attack/crit stats |
-| `src/config.ts` | Add upgrade cost constants |
+| `src/scenes/UIScene.ts` | Mount UpgradePanel, listen for altar-activated, input lock relay |
+| `src/entities/Player.ts` | Accept StatsManager, use for speed/maxHp, add armor reduction |
+| `src/systems/CombatSystem.ts` | Accept StatsManager, use for attack/crit stats |
+| `src/ui/Joystick.ts` | Listen for ui-input-lock/unlock events |
+| `src/config.ts` | Add upgrade definitions (base cost, scale, max level, effect) |
 
-Estimated: ~300 lines new code, ~50 lines modified across existing files.
+Estimated: ~350 lines new code, ~80 lines modified across existing files.
 
 ## Acceptance Criteria
 
-1. Each dungeon floor has exactly 1 altar room (no enemies, altar at center)
+1. Each dungeon floor has exactly 1 altar room (no enemies, altar at center); skipped if < 3 rooms
 2. Walking near altar shows "Upgrade" text prompt
-3. Stopping near altar opens upgrade panel with 3 random options
-4. Selecting an upgrade deducts gold and immediately applies stat bonus
-5. HUD reflects updated stats (gold decreases, HP bar may grow for Max HP+)
-6. Altar becomes inactive after one use per floor
+3. Stopping near altar for 0.5s opens upgrade panel with 3 random options (max-level excluded)
+4. Selecting an upgrade deducts gold, applies stat bonus, shows confirmation text
+5. HUD reflects gold decrease; Max HP+ visibly grows HP bar
+6. Altar becomes inactive (dimmed) after one use per floor
 7. Skip button closes panel without cost
 8. Insufficient gold: card is dimmed, cannot select
 9. Recovery regen and armor reduction work correctly in combat
+10. Joystick is disabled while upgrade panel is open, no residual movement on close
 
 ## Risks
 
-- **Panel touch conflicts with joystick**: Panel renders in UIScene above everything, joystick input should be blocked while panel is open (physics is paused, so this is naturally handled)
-- **StatsManager migration**: Changing how Player reads stats could break existing combat math — need careful integration
-- **Altar room selection**: Must ensure at least 3 rooms exist (spawn + altar + 1 combat room minimum). Current min is 6 rooms, so safe.
+- **StatsManager migration**: Changing how Player/CombatSystem read stats — mitigated by keeping same formulas, just moving data source
+- **Altar room selection edge case**: Handled by fallback (skip if < 3 rooms)
 
 ## Out of Scope
 
@@ -137,3 +172,4 @@ Estimated: ~300 lines new code, ~50 lines modified across existing files.
 - Skill-type upgrades (fire aura, chain lightning, etc.) — future phase
 - Multi-floor progression (floor 2+)
 - Save/load upgrade state
+- Additional stat display in HUD (attack/armor/etc.) — future iteration
