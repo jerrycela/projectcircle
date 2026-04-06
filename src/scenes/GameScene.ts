@@ -10,7 +10,20 @@ import EventBus from '../systems/EventBus';
 import { CombatSystem } from '../systems/CombatSystem';
 import { LootSystem } from '../systems/LootSystem';
 import { StatsManager } from '../systems/StatsManager';
+import type { StatBlock } from '../systems/StatsManager';
 import { Altar } from '../entities/Altar';
+import { FloorManager } from '../systems/FloorManager';
+import type { FloorState } from '../systems/FloorManager';
+import { Staircase } from '../entities/Staircase';
+
+export interface RunState {
+  statsManagerState: { bonuses: StatBlock; levels: Record<string, number> };
+  playerHp: number;
+  playerMp: number;
+  playerGold: number;
+  playerMaterials: { wood: number; ore: number; cloth: number };
+  floorManagerState: FloorState;
+}
 
 export class GameScene extends Phaser.Scene {
   private debugManager?: DebugManager;
@@ -28,6 +41,9 @@ export class GameScene extends Phaser.Scene {
   public lootGroup!: Phaser.GameObjects.Group;
   public currentPlayerRoom: number | null = null;
   private altar?: Altar;
+  public floorManager!: FloorManager;
+  private staircase?: Staircase;
+  private runState?: RunState;
 
   // Input state
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -47,10 +63,28 @@ export class GameScene extends Phaser.Scene {
     super('GameScene');
   }
 
+  init(data?: RunState): void {
+    this.runState = data;
+  }
+
   create(): void {
     console.log('GameScene started');
 
-    const { grid, rooms } = generate();
+    // Restore or create FloorManager
+    this.floorManager = new FloorManager(this.runState?.floorManagerState);
+
+    // Restore or create StatsManager
+    this.statsManager = new StatsManager();
+    if (this.runState?.statsManagerState) {
+      this.statsManager.importState(this.runState.statsManagerState);
+    }
+
+    // Generate dungeon with floor-scaled config
+    const floorConfig = this.floorManager.getFloorConfig();
+    const { grid, rooms } = generate({
+      roomCount: floorConfig.roomCount,
+      roomSize: floorConfig.roomSize,
+    });
     this.grid = grid;
     this.rooms = rooms;
 
@@ -68,12 +102,10 @@ export class GameScene extends Phaser.Scene {
         const worldY = gy * tileSize;
 
         if (grid[gy][gx] === 0) {
-          // Floor tile — no physics needed
           const tile = this.add.image(worldX, worldY, 'floor-tile');
           tile.setOrigin(0, 0);
           floorGroup.add(tile);
         } else {
-          // Wall tile — StaticGroup for collision
           const tile = this.wallGroup.create(worldX, worldY, 'wall-tile') as Phaser.Physics.Arcade.Image;
           tile.setOrigin(0, 0);
           tile.refreshBody();
@@ -85,12 +117,20 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, mapPixelWidth, mapPixelHeight);
     this.cameras.main.setBackgroundColor('#000000');
 
-    // Spawn player at center of first room (world coordinates)
+    // Spawn player at center of first room
     const firstRoom = rooms[0];
     const spawnX = firstRoom.centerX * tileSize + tileSize / 2;
     const spawnY = firstRoom.centerY * tileSize + tileSize / 2;
-    this.statsManager = new StatsManager();
     this.player = new Player(this, spawnX, spawnY, this.statsManager);
+
+    // Restore player state from RunState
+    if (this.runState) {
+      this.player.hp = this.runState.playerHp;
+      this.player.mp = this.runState.playerMp;
+      this.player.gold = this.runState.playerGold;
+      this.player.materials = { ...this.runState.playerMaterials };
+      this.player.maxHp = this.statsManager.getStat('maxHp');
+    }
 
     // Player vs walls collider
     this.physics.add.collider(this.player, this.wallGroup);
@@ -129,7 +169,7 @@ export class GameScene extends Phaser.Scene {
     // Mark first room as active and spawn enemies (player spawns here)
     firstRoom.state = RoomState.ACTIVE;
     this.currentPlayerRoom = 0;
-    this.spawnEnemiesInRoom(0);
+    this.spawnEnemiesInRoom(0, floorConfig.enemyHpScale, floorConfig.enemyAtkScale, floorConfig.enemiesPerRoom);
 
     // Spawn altar in ALTAR room (if any)
     const altarRoom = this.rooms.find(r => r.state === RoomState.ALTAR);
@@ -137,6 +177,15 @@ export class GameScene extends Phaser.Scene {
       const altarX = altarRoom.centerX * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2;
       const altarY = altarRoom.centerY * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2;
       this.altar = new Altar(this, altarX, altarY, this.player);
+    }
+
+    // Spawn staircase (hidden until all rooms cleared)
+    const staircaseRoom = this.pickStaircaseRoom();
+    if (staircaseRoom !== null) {
+      const sRoom = this.rooms[staircaseRoom];
+      const sx = sRoom.centerX * tileSize + tileSize / 2;
+      const sy = sRoom.centerY * tileSize + tileSize / 2;
+      this.staircase = new Staircase(this, sx, sy, this.player);
     }
 
     // Loot group and system
@@ -153,6 +202,7 @@ export class GameScene extends Phaser.Scene {
     // Player death handler
     EventBus.on('player-died', () => {
       this.combatSystem.onPlayerDied();
+      this.triggerDeath();
     });
 
     EventBus.on('gameplay-lock', (locked: boolean) => {
@@ -166,6 +216,21 @@ export class GameScene extends Phaser.Scene {
 
     // Register shutdown handler so Phaser calls it on scene stop
     this.events.on('shutdown', this.onShutdown, this);
+
+    // Fade in on floor entry
+    if (this.runState) {
+      this.cameras.main.fadeIn(300, 0, 0, 0);
+      this.cameras.main.once('camerafadeincomplete', () => {
+        this.gameplayLocked = false;
+        this.physics.resume();
+        EventBus.emit('gameplay-lock', false);
+      });
+      // Keep locked during fade
+      this.gameplayLocked = true;
+      this.physics.pause();
+    }
+
+    EventBus.emit('scene-ready');
 
     const params = new URLSearchParams(window.location.search);
     if (params.get('debug') === '1') {
@@ -181,6 +246,7 @@ export class GameScene extends Phaser.Scene {
     EventBus.off('player-died');
     EventBus.off('gameplay-lock');
     EventBus.off('altar-consumed');
+    EventBus.off('floor-cleared');
   }
 
   update(time: number, delta: number): void {
@@ -214,6 +280,7 @@ export class GameScene extends Phaser.Scene {
     this.combatSystem.update(time, delta);
     this.lootSystem.update();
     this.altar?.update(time, delta);
+    this.staircase?.update();
     this.debugManager?.update();
   }
 
@@ -235,7 +302,8 @@ export class GameScene extends Phaser.Scene {
           this.currentPlayerRoom = i;
           if (room.state === RoomState.UNVISITED) {
             room.state = RoomState.ACTIVE;
-            this.spawnEnemiesInRoom(i);
+            const fc = this.floorManager.getFloorConfig();
+            this.spawnEnemiesInRoom(i, fc.enemyHpScale, fc.enemyAtkScale, fc.enemiesPerRoom);
           }
         }
         return;
@@ -270,18 +338,24 @@ export class GameScene extends Phaser.Scene {
         console.log(`[GameScene] Room ${i} cleared`);
       }
     }
+
+    // Check if all combat rooms are cleared (excluding ALTAR rooms)
+    const combatRooms = this.rooms.filter(r => r.state !== RoomState.ALTAR);
+    const allCombatCleared = combatRooms.length > 0 && combatRooms.every(r => r.state === RoomState.CLEARED);
+    if (allCombatCleared && this.staircase?.getState() === 'HIDDEN') {
+      EventBus.emit('floor-cleared');
+      this.staircase.reveal();
+    }
   }
 
-  spawnEnemiesInRoom(roomIndex: number): void {
+  spawnEnemiesInRoom(roomIndex: number, hpScale = 1, atkScale = 1, countOverride?: { min: number; max: number }): void {
     const room = this.rooms[roomIndex];
     if (!room) return;
     if (room.state === RoomState.ALTAR) return;
 
     const tileSize = GAME_CONFIG.TILE_SIZE;
-    const count = Phaser.Math.Between(
-      GAME_CONFIG.ENEMIES_PER_ROOM.min,
-      GAME_CONFIG.ENEMIES_PER_ROOM.max,
-    );
+    const countRange = countOverride ?? GAME_CONFIG.ENEMIES_PER_ROOM;
+    const count = Phaser.Math.Between(countRange.min, countRange.max);
 
     // Room world bounds (inner floor area, excluding wall tiles)
     const roomLeft = room.x * tileSize;
@@ -315,7 +389,7 @@ export class GameScene extends Phaser.Scene {
         ) continue;
 
         // Valid position found
-        const enemy = new Enemy(this, wx, wy, roomIndex);
+        const enemy = new Enemy(this, wx, wy, roomIndex, hpScale, atkScale);
         this.enemyGroup.add(enemy);
         placed = true;
         break;
@@ -325,6 +399,66 @@ export class GameScene extends Phaser.Scene {
         console.warn(`[GameScene] Could not place enemy ${i} in room ${roomIndex} after ${maxRetries} attempts`);
       }
     }
+  }
+
+  private pickStaircaseRoom(): number | null {
+    const candidates = this.rooms
+      .map((r, i) => ({ room: r, index: i }))
+      .filter(({ room, index }) => index > 0 && room.state !== RoomState.ALTAR);
+
+    if (candidates.length > 0) {
+      return candidates[Math.floor(Math.random() * candidates.length)].index;
+    }
+
+    if (this.rooms.length > 0) {
+      return 0;
+    }
+
+    return null;
+  }
+
+  triggerFloorTransition(): void {
+    this.gameplayLocked = true;
+    this.physics.pause();
+    EventBus.emit('gameplay-lock', true);
+
+    this.cameras.main.fadeOut(300, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      const runState: RunState = {
+        statsManagerState: this.statsManager.exportState(),
+        playerHp: this.player.hp,
+        playerMp: this.player.mp,
+        playerGold: this.player.gold,
+        playerMaterials: { ...this.player.materials },
+        floorManagerState: (() => {
+          this.floorManager.advanceFloor();
+          return this.floorManager.exportState();
+        })(),
+      };
+      this.scene.restart(runState);
+    });
+  }
+
+  triggerDeath(): void {
+    this.gameplayLocked = true;
+    this.physics.pause();
+    EventBus.emit('gameplay-lock', true);
+    EventBus.emit('show-death-text', this.floorManager.currentFloor);
+
+    this.time.delayedCall(1500, () => {
+      const runState: RunState = {
+        statsManagerState: this.statsManager.exportState(),
+        playerHp: this.statsManager.getStat('maxHp'),
+        playerMp: GAME_CONFIG.PLAYER_MP,
+        playerGold: 0,
+        playerMaterials: { wood: 0, ore: 0, cloth: 0 },
+        floorManagerState: {
+          currentFloor: 1,
+          highestFloor: this.floorManager.highestFloor,
+        },
+      };
+      this.scene.restart(runState);
+    });
   }
 
   private handleInput(): void {
