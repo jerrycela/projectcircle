@@ -237,8 +237,6 @@ export class CombatSystem {
   }
 
   onPlayerDied(): void {
-    // Pause physics so enemies stop
-    this.scene.physics.pause();
-    EventBus.emit('show-death-screen');
+    // Physics pause and death screen are handled by GameScene.triggerDeath()
   }
 }
