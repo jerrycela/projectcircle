@@ -4,6 +4,7 @@ export const RoomState = {
   UNVISITED: 'UNVISITED',
   ACTIVE: 'ACTIVE',
   CLEARED: 'CLEARED',
+  ALTAR: 'ALTAR',
 } as const;
 
 export type RoomState = typeof RoomState[keyof typeof RoomState];

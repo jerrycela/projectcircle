@@ -47,4 +47,82 @@ export const GAME_CONFIG = {
   // Joystick
   JOYSTICK_DEAD_ZONE: 5,
   JOYSTICK_MAX_RADIUS: 60,
+
+  // Altar
+  ALTAR_ACTIVATE_RANGE: 60,
+  ALTAR_ARM_DELAY: 500,
+  ALTAR_SIZE: 48,
+
+  // Recovery (HP regen)
+  PLAYER_RECOVERY: 0, // base recovery (0 = none until upgraded)
+
+  // Armor
+  PLAYER_ARMOR: 0, // base armor (0 = none until upgraded)
 } as const;
+
+export interface UpgradeDefinition {
+  name: string;
+  description: string;
+  statKeys: string[];
+  effectPerLevel: number[];
+  baseCost: number;
+  costScale: number;
+  maxLevel: number;
+}
+
+export const UPGRADE_DEFS: Record<string, UpgradeDefinition> = {
+  attack: {
+    name: 'Attack+',
+    description: '+4 Attack Power',
+    statKeys: ['attackMin', 'attackMax'],
+    effectPerLevel: [4, 4],
+    baseCost: 20,
+    costScale: 15,
+    maxLevel: 10,
+  },
+  armor: {
+    name: 'Armor+',
+    description: '+3 Armor',
+    statKeys: ['armor'],
+    effectPerLevel: [3],
+    baseCost: 15,
+    costScale: 10,
+    maxLevel: 10,
+  },
+  critDamage: {
+    name: 'Crit Damage+',
+    description: '+10% Crit Damage',
+    statKeys: ['critDamage'],
+    effectPerLevel: [0.10],
+    baseCost: 25,
+    costScale: 20,
+    maxLevel: 5,
+  },
+  recovery: {
+    name: 'Recovery+',
+    description: '+1 HP/s Regen',
+    statKeys: ['recovery'],
+    effectPerLevel: [1],
+    baseCost: 20,
+    costScale: 15,
+    maxLevel: 5,
+  },
+  moveSpeed: {
+    name: 'Move Speed+',
+    description: '+15 Speed',
+    statKeys: ['moveSpeed'],
+    effectPerLevel: [15],
+    baseCost: 30,
+    costScale: 20,
+    maxLevel: 3,
+  },
+  maxHp: {
+    name: 'Max HP+',
+    description: '+30 Max HP',
+    statKeys: ['maxHp'],
+    effectPerLevel: [30],
+    baseCost: 15,
+    costScale: 10,
+    maxLevel: 10,
+  },
+};
