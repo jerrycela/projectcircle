@@ -111,11 +111,11 @@ function isConnected(grid: number[][], rooms: Room[]): boolean {
   return true;
 }
 
-function tryGenerate(roomCount: number): DungeonData | null {
+function tryGenerate(roomCount: number, roomSizeMin?: number, roomSizeMax?: number): DungeonData | null {
   const width = GAME_CONFIG.MAP_WIDTH;
   const height = GAME_CONFIG.MAP_HEIGHT;
-  const roomMin = GAME_CONFIG.ROOM_SIZE.min;
-  const roomMax = GAME_CONFIG.ROOM_SIZE.max;
+  const roomMin = roomSizeMin ?? GAME_CONFIG.ROOM_SIZE.min;
+  const roomMax = roomSizeMax ?? GAME_CONFIG.ROOM_SIZE.max;
 
   const grid = initGrid(width, height);
   const rooms: Room[] = [];
@@ -196,13 +196,20 @@ function assignAltarRoom(rooms: Room[]): void {
   console.log(`[DungeonGenerator] Altar room assigned: room ${rooms.indexOf(pick)}`);
 }
 
-export function generate(): DungeonData {
-  const minRoomCount = GAME_CONFIG.ROOM_COUNT.min;
-  const maxRoomCount = GAME_CONFIG.ROOM_COUNT.max;
+export interface GenerateOptions {
+  roomCount?: { min: number; max: number };
+  roomSize?: { min: number; max: number };
+}
+
+export function generate(options?: GenerateOptions): DungeonData {
+  const minRoomCount = options?.roomCount?.min ?? GAME_CONFIG.ROOM_COUNT.min;
+  const maxRoomCount = options?.roomCount?.max ?? GAME_CONFIG.ROOM_COUNT.max;
+  const roomSizeMin = options?.roomSize?.min;
+  const roomSizeMax = options?.roomSize?.max;
 
   for (let roomCount = maxRoomCount; roomCount >= minRoomCount; roomCount--) {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      const result = tryGenerate(roomCount);
+      const result = tryGenerate(roomCount, roomSizeMin, roomSizeMax);
       if (result !== null) {
         console.log(`[DungeonGenerator] Generated dungeon with ${result.rooms.length} rooms (target: ${roomCount})`);
         assignAltarRoom(result.rooms);

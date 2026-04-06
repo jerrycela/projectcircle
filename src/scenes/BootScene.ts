@@ -119,5 +119,13 @@ export class BootScene extends Phaser.Scene {
     altar.strokeCircle(24, 24, 22);
     altar.generateTexture('altar', 48, 48);
     altar.destroy();
+
+    // staircase: 48x48 green down-arrow
+    const staircase = this.make.graphics({ x: 0, y: 0 }, false);
+    staircase.fillStyle(0x00ff66);
+    staircase.fillTriangle(24, 38, 10, 18, 38, 18); // down arrow head
+    staircase.fillRect(18, 6, 12, 16); // arrow shaft
+    staircase.generateTexture('staircase', 48, 48);
+    staircase.destroy();
   }
 }

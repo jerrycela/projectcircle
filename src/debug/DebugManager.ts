@@ -27,6 +27,7 @@ interface GameState {
   };
   dungeon: {
     floor: number;
+    highestFloor: number;
     roomCount: number;
     roomsCleared: number;
     totalEnemies: number;
@@ -59,6 +60,8 @@ interface DebugAPI {
   showRoomBounds(on: boolean): void;
   showAttackRange(on: boolean): void;
   setGameSpeed(multiplier: number): void;
+  setFloor(n: number): void;
+  revealStaircase(): void;
   getStateSnapshot(): GameState;
   log(msg: string): void;
 }
@@ -206,6 +209,30 @@ export class DebugManager {
         this.scene.physics.world.timeScale = 1 / multiplier;
         console.log(`[Debug] Game speed set to ${multiplier}x`);
       },
+      setFloor: (n: number) => {
+        const floor = Math.max(1, n);
+        const player = this.scene.player;
+        if (!player) { console.log('[Debug] setFloor: player not ready'); return; }
+        const runState = {
+          statsManagerState: this.scene.statsManager.exportState(),
+          playerHp: player.hp,
+          playerMp: player.mp,
+          playerGold: player.gold,
+          playerMaterials: { ...player.materials },
+          floorManagerState: {
+            currentFloor: floor,
+            highestFloor: Math.max(this.scene.floorManager.highestFloor, floor),
+          },
+        };
+        console.log(`[Debug] setFloor: jumping to floor ${floor}`);
+        this.scene.scene.restart(runState);
+      },
+      revealStaircase: () => {
+        const staircase = (this.scene as unknown as Record<string, unknown>).staircase as { reveal(): void } | undefined;
+        if (!staircase) { console.log('[Debug] revealStaircase: no staircase found'); return; }
+        staircase.reveal();
+        console.log('[Debug] revealStaircase: forced reveal');
+      },
       getStateSnapshot: () => this.buildStateSnapshot(),
       log: (msg: string) => { console.log(`[Debug] ${msg}`); },
     };
@@ -235,7 +262,8 @@ export class DebugManager {
         currentRoom: this.scene.currentPlayerRoom ?? null,
       },
       dungeon: {
-        floor: 1,
+        floor: this.scene.floorManager?.currentFloor ?? 1,
+        highestFloor: this.scene.floorManager?.highestFloor ?? 1,
         roomCount: this.scene.rooms.length,
         roomsCleared: this.scene.rooms.filter(r => r.state === RoomState.CLEARED).length,
         totalEnemies: this.scene.enemyGroup ? this.scene.enemyGroup.getLength() : 0,

@@ -9,7 +9,7 @@ export class UIScene extends Phaser.Scene {
   private joystick!: Joystick;
   private hud!: HUD;
   private upgradePanel!: UpgradePanel;
-  private deathOverlay?: Phaser.GameObjects.Container;
+  private deathText?: Phaser.GameObjects.Text;
 
   constructor() {
     super('UIScene');
@@ -28,8 +28,12 @@ export class UIScene extends Phaser.Scene {
       }
     });
 
-    EventBus.on('show-death-screen', () => {
-      this.showDeathScreen();
+    EventBus.on('show-death-text', (floor: number) => {
+      this.showDeathText(floor);
+    });
+
+    EventBus.on('scene-ready', () => {
+      this.destroyDeathText();
     });
   }
 
@@ -37,71 +41,27 @@ export class UIScene extends Phaser.Scene {
     this.hud.update();
   }
 
-  private showDeathScreen(): void {
-    if (this.deathOverlay) return; // Already shown
+  private showDeathText(floor: number): void {
+    if (this.deathText) return;
 
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-    const cx = width / 2;
-    const cy = height / 2;
+    const cx = this.cameras.main.width / 2;
+    const cy = this.cameras.main.height / 2;
 
-    this.deathOverlay = this.add.container(0, 0);
-    this.deathOverlay.setDepth(200);
-
-    // Semi-transparent black background
-    const bg = this.add.rectangle(cx, cy, width, height, 0x000000, 0.7);
-    this.deathOverlay.add(bg);
-
-    // "You died" text
-    const titleText = this.add.text(cx, cy - 60, 'You Died', {
-      fontSize: '48px',
-      color: '#cc0000',
+    this.deathText = this.add.text(cx, cy, `You Died - Floor ${floor}`, {
+      fontSize: '24px',
+      color: '#ffffff',
       fontFamily: 'monospace',
       stroke: '#000000',
       strokeThickness: 4,
     });
-    titleText.setOrigin(0.5, 0.5);
-    this.deathOverlay.add(titleText);
-
-    // Restart button background
-    const btnBg = this.add.rectangle(cx, cy + 40, 180, 50, 0x333333, 1.0);
-    btnBg.setStrokeStyle(2, 0xffffff);
-    btnBg.setInteractive({ useHandCursor: true });
-    this.deathOverlay.add(btnBg);
-
-    // Restart button text
-    const btnText = this.add.text(cx, cy + 40, 'Restart', {
-      fontSize: '24px',
-      color: '#ffffff',
-      fontFamily: 'monospace',
-    });
-    btnText.setOrigin(0.5, 0.5);
-    this.deathOverlay.add(btnText);
-
-    // Hover effect
-    btnBg.on('pointerover', () => {
-      btnBg.setFillStyle(0x555555);
-    });
-    btnBg.on('pointerout', () => {
-      btnBg.setFillStyle(0x333333);
-    });
-
-    // Restart on click
-    btnBg.on('pointerdown', () => {
-      this.restartGame();
-    });
+    this.deathText.setOrigin(0.5, 0.5);
+    this.deathText.setDepth(200);
   }
 
-  private restartGame(): void {
-    // Clean up EventBus listeners to avoid duplicates on restart
-    EventBus.off('altar-activated');
-    EventBus.off('altar-consumed');
-    EventBus.off('gameplay-lock');
-    EventBus.off('show-death-screen');
-
-    // Stop both scenes and restart from Boot
-    this.scene.stop('UIScene');
-    this.scene.stop('GameScene');
-    this.scene.start('BootScene');
+  private destroyDeathText(): void {
+    if (this.deathText) {
+      this.deathText.destroy();
+      this.deathText = undefined;
+    }
   }
 }
