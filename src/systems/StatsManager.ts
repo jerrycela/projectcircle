@@ -62,4 +62,16 @@ export class StatsManager {
   incrementLevel(upgradeType: string): void {
     this.levels[upgradeType] = (this.levels[upgradeType] ?? 0) + 1;
   }
+
+  exportState(): { bonuses: StatBlock; levels: Record<string, number> } {
+    return {
+      bonuses: { ...this.bonuses },
+      levels: { ...this.levels },
+    };
+  }
+
+  importState(state: { bonuses: StatBlock; levels: Record<string, number> }): void {
+    this.bonuses = { ...state.bonuses };
+    this.levels = { ...state.levels };
+  }
 }
