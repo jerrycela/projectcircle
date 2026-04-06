@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { SKILL_DEFS } from '../config';
-import type { SkillDefinition } from '../config';
+import { SKILL_DEFS, GAME_CONFIG } from '../config';
+import type { SkillDefinition, SkillLevelData } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import type { Enemy } from '../entities/Enemy';
 import EventBus from './EventBus';
@@ -11,6 +11,7 @@ interface SkillSlot {
   type: string | null;
   state: SkillSlotState;
   cooldownRemaining: number; // ms
+  level: number;
 }
 
 export class SkillManager {
@@ -20,8 +21,8 @@ export class SkillManager {
   constructor(scene: GameScene) {
     this.scene = scene;
     this.slots = [
-      { type: null, state: 'EMPTY', cooldownRemaining: 0 },
-      { type: null, state: 'EMPTY', cooldownRemaining: 0 },
+      { type: null, state: 'EMPTY', cooldownRemaining: 0, level: 0 },
+      { type: null, state: 'EMPTY', cooldownRemaining: 0, level: 0 },
     ];
   }
 
@@ -39,6 +40,7 @@ export class SkillManager {
       if (slot.state === 'EMPTY') {
         slot.type = type;
         slot.state = 'READY';
+        slot.level = 1;
         EventBus.emit('skill-state-changed');
         return true;
       }
@@ -48,6 +50,43 @@ export class SkillManager {
 
   hasSkill(type: string): boolean {
     return this.slots.some(s => s.type === type);
+  }
+
+  upgradeSkill(type: string): boolean {
+    const def = SKILL_DEFS[type];
+    if (!def) return false;
+    for (const slot of this.slots) {
+      if (slot.type === type) {
+        if (slot.level >= GAME_CONFIG.SKILL_MAX_LEVEL) return false;
+        slot.level++;
+        EventBus.emit('skill-state-changed');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  getSkillLevel(type: string): number {
+    for (const slot of this.slots) {
+      if (slot.type === type) return slot.level;
+    }
+    return 0;
+  }
+
+  getSlotLevel(slot: number): number {
+    return this.slots[slot]?.level ?? 0;
+  }
+
+  replaceSkill(slotIndex: number, newType: string): boolean {
+    const slot = this.slots[slotIndex];
+    if (!slot || slot.state === 'EMPTY') return false;
+    if (!SKILL_DEFS[newType]) return false;
+    slot.type = newType;
+    slot.state = 'READY';
+    slot.cooldownRemaining = 0;
+    slot.level = 1;
+    EventBus.emit('skill-state-changed');
+    return true;
   }
 
   getSkillCount(): number {
@@ -101,6 +140,7 @@ export class SkillManager {
       slot.type = null;
       slot.state = 'EMPTY';
       slot.cooldownRemaining = 0;
+      slot.level = 0;
     }
     EventBus.emit('skill-state-changed');
   }
@@ -192,47 +232,62 @@ export class SkillManager {
 
   // ------------------------------------------------------------------ STATE
 
-  exportState(): { skills: string[] } {
+  exportState(): { skills: Array<{ type: string; level: number }> } {
     return {
-      skills: this.slots.filter(s => s.type !== null).map(s => s.type as string),
+      skills: this.slots
+        .filter(s => s.type !== null)
+        .map(s => ({ type: s.type as string, level: s.level })),
     };
   }
 
-  importState(state: { skills: string[] }): void {
-    // Reset all
+  importState(state: { skills: Array<string | { type: string; level: number }> }): void {
     for (const slot of this.slots) {
       slot.type = null;
       slot.state = 'EMPTY';
       slot.cooldownRemaining = 0;
+      slot.level = 0;
     }
-    // Re-apply (cooldowns reset on floor transition by design)
-    for (const type of state.skills) {
-      this.addSkill(type);
+    for (const entry of state.skills) {
+      const type = typeof entry === 'string' ? entry : entry.type;
+      const level = typeof entry === 'string' ? 1 : (entry.level ?? 1);
+      if (!SKILL_DEFS[type]) continue;
+      for (const slot of this.slots) {
+        if (slot.state === 'EMPTY') {
+          slot.type = type;
+          slot.state = 'READY';
+          slot.level = level;
+          break;
+        }
+      }
     }
+    EventBus.emit('skill-state-changed');
   }
 
   // ------------------------------------------------------------------ SKILL EXECUTION
 
   private executeSkill(type: string, def: SkillDefinition): void {
+    const level = this.getSkillLevel(type);
+    const scaling = def.levelScaling[(level || 1) - 1] ?? def.levelScaling[0];
     switch (type) {
       case 'whirlwind':
-        this.executeWhirlwind(def);
+        this.executeWhirlwind(def, scaling);
         break;
       case 'shadow-dash':
-        this.executeShadowDash(def);
+        this.executeShadowDash(def, scaling);
         break;
       case 'arcane-bolt':
-        this.executeArcaneBolt(def);
+        this.executeArcaneBolt(def, scaling);
         break;
       default:
         console.warn(`[SkillManager] Unknown skill: ${type}`);
     }
   }
 
-  private calcSkillDamage(def: SkillDefinition): number {
+  private calcSkillDamage(def: SkillDefinition, level: number): number {
     const min = this.scene.statsManager.getStat('attackMin');
     const max = this.scene.statsManager.getStat('attackMax');
-    return Math.floor(Phaser.Math.Between(min, max) * def.damageMultiplier);
+    const scaling = def.levelScaling[level - 1] ?? def.levelScaling[0];
+    return Math.floor(Phaser.Math.Between(min, max) * scaling.damageMultiplier);
   }
 
   private spawnSkillDamageNumber(x: number, y: number, damage: number): void {
@@ -258,9 +313,9 @@ export class SkillManager {
 
   // ---- Whirlwind
 
-  private executeWhirlwind(def: SkillDefinition): void {
+  private executeWhirlwind(def: SkillDefinition, scaling: SkillLevelData): void {
     const player = this.scene.player;
-    const radius = def.radius ?? 100;
+    const radius = scaling.radius ?? def.radius ?? 100;
 
     // Camera shake
     this.scene.cameras.main.shake(100, 0.005);
@@ -276,7 +331,8 @@ export class SkillManager {
       const dy = enemy.y - player.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist <= radius) {
-        const dmg = this.calcSkillDamage(def);
+        const level = this.getSkillLevel(def.type);
+        const dmg = this.calcSkillDamage(def, level);
         this.spawnSkillDamageNumber(enemy.x, enemy.y, dmg);
         // Knockback outward
         const nx = dist > 0 ? dx / dist : 1;
@@ -335,9 +391,9 @@ export class SkillManager {
 
   // ---- Shadow Dash
 
-  private executeShadowDash(def: SkillDefinition): void {
+  private executeShadowDash(def: SkillDefinition, scaling: SkillLevelData): void {
     const player = this.scene.player;
-    const distance = def.dashDistance ?? 150;
+    const distance = scaling.dashDistance ?? def.dashDistance ?? 150;
     const pathWidth = def.dashPathWidth ?? 32;
     const duration = def.dashDurationMs ?? 200;
 
@@ -382,7 +438,8 @@ export class SkillManager {
       delay: 16,
       repeat: Math.ceil(duration / 16),
       callback: () => {
-        this.checkDashPathDamage(startX, startY, player.x, player.y, pathWidth, def, hitEnemies);
+        const level = this.getSkillLevel(def.type);
+        this.checkDashPathDamage(startX, startY, player.x, player.y, pathWidth, def, hitEnemies, level);
 
         // Spawn trail afterimages
         if (Math.random() < 0.5) {
@@ -429,6 +486,7 @@ export class SkillManager {
     pathWidth: number,
     def: SkillDefinition,
     hitEnemies: Set<Enemy>,
+    level: number,
   ): void {
     const enemies = this.scene.enemyGroup.getChildren() as Enemy[];
     const halfWidth = pathWidth / 2;
@@ -457,7 +515,7 @@ export class SkillManager {
       const perp = Math.abs(ex * (-ny) + ey * nx);
       if (perp <= halfWidth) {
         hitEnemies.add(enemy);
-        const dmg = this.calcSkillDamage(def);
+        const dmg = this.calcSkillDamage(def, level);
         this.spawnSkillDamageNumber(enemy.x, enemy.y, dmg);
         enemy.takeDamage(dmg, nx * 60, ny * 60, startX, startY);
       }
@@ -466,7 +524,7 @@ export class SkillManager {
 
   // ---- Arcane Bolt
 
-  private executeArcaneBolt(def: SkillDefinition): void {
+  private executeArcaneBolt(def: SkillDefinition, scaling: SkillLevelData): void {
     const player = this.scene.player;
 
     // Determine fire direction based on facing
@@ -488,7 +546,7 @@ export class SkillManager {
 
     const boltSpeed = def.projectileSpeed ?? 350;
     const range = def.projectileRange ?? 300;
-    const maxHits = (def.pierceCount ?? 2) + 1; // pierceCount=2 means hits 3 total
+    const maxHits = (scaling.pierceCount ?? def.pierceCount ?? 2) + 1; // pierceCount=2 means hits 3 total
 
     // Create projectile as a Graphics object (visual) + physics body
     const bolt = this.scene.add.graphics();
@@ -531,7 +589,8 @@ export class SkillManager {
         hitEnemies.add(enemy);
         hitCount++;
 
-        const dmg = this.calcSkillDamage(def);
+        const level = this.getSkillLevel(def.type);
+        const dmg = this.calcSkillDamage(def, level);
         this.spawnSkillDamageNumber(enemy.x, enemy.y, dmg);
         enemy.takeDamage(dmg, dirX * 60, dirY * 60, startX, startY);
 
