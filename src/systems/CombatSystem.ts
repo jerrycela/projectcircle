@@ -4,16 +4,19 @@ import type { GameScene } from '../scenes/GameScene';
 import type { Enemy } from '../entities/Enemy';
 import EventBus from './EventBus';
 import type { StatsManager } from './StatsManager';
+import type { SkillManager } from './SkillManager';
 
 export class CombatSystem {
   private scene: GameScene;
   private statsManager: StatsManager;
+  private skillManager?: SkillManager;
   private lastAttackTime: number = 0;
   private lastScanTime: number = 0;
 
-  constructor(scene: GameScene, statsManager: StatsManager) {
+  constructor(scene: GameScene, statsManager: StatsManager, skillManager?: SkillManager) {
     this.scene = scene;
     this.statsManager = statsManager;
+    this.skillManager = skillManager;
 
     // Camera shake on player hit (no flash for normal attacks, reserved for skills)
     EventBus.on('player-hit', () => {
@@ -35,6 +38,9 @@ export class CombatSystem {
 
   private tryPlayerAttack(time: number): void {
     const player = this.scene.player;
+
+    // Suppress auto-attack while any skill is in CASTING state
+    if (this.skillManager?.isCasting()) return;
 
     // CRITICAL: player must NOT be moving to auto-attack
     if (player.isMoving) return;
