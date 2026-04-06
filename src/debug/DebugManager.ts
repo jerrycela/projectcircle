@@ -24,6 +24,9 @@ interface GameState {
     moveSpeed: number;
     speed: number;
     currentRoom: number | null;
+    playerSkills: string[];
+    skillStates: Record<string, string>;
+    skillCooldowns: Record<string, number>;
   };
   dungeon: {
     floor: number;
@@ -67,6 +70,13 @@ interface DebugAPI {
   revealStaircase(): void;
   getStateSnapshot(): GameState;
   log(msg: string): void;
+  // Skill debug commands
+  giveSkill(type: string): void;
+  removeSkills(): void;
+  listSkills(): void;
+  castSkill(slot: number): void;
+  setSkillCooldown(type: string, ms: number): void;
+  getSkillCooldown(slot: number): number;
 }
 
 declare global {
@@ -268,11 +278,78 @@ export class DebugManager {
       },
       getStateSnapshot: () => this.buildStateSnapshot(),
       log: (msg: string) => { console.log(`[Debug] ${msg}`); },
+
+      // ---- Skill commands
+      giveSkill: (type: string) => {
+        const sm = this.scene.skillManager;
+        if (!sm) { console.log('[Debug] giveSkill: skillManager not ready'); return; }
+        const result = sm.addSkill(type);
+        if (result) {
+          console.log(`[Debug] giveSkill: added "${type}"`);
+        } else {
+          console.log(`[Debug] giveSkill: failed to add "${type}" (unknown type, already owned, or slots full)`);
+        }
+      },
+
+      removeSkills: () => {
+        const sm = this.scene.skillManager;
+        if (!sm) { console.log('[Debug] removeSkills: skillManager not ready'); return; }
+        sm.removeAllSkills();
+        console.log('[Debug] removeSkills: all skills cleared');
+      },
+
+      listSkills: () => {
+        const sm = this.scene.skillManager;
+        if (!sm) { console.log('[Debug] listSkills: skillManager not ready'); return; }
+        console.log('[Debug] listSkills:');
+        for (let i = 0; i < 2; i++) {
+          const type = sm.getSlotType(i);
+          const state = sm.getSlotState(i);
+          const cd = sm.getSlotCooldownRemaining(i);
+          console.log(`  Slot ${i}: ${type ?? '(empty)'} | ${state}${state === 'COOLDOWN' ? ` | ${cd.toFixed(0)}ms remaining` : ''}`);
+        }
+      },
+
+      castSkill: (slot: number) => {
+        const sm = this.scene.skillManager;
+        if (!sm) { console.log('[Debug] castSkill: skillManager not ready'); return; }
+        sm.forceCast(slot);
+        console.log(`[Debug] castSkill: force-cast slot ${slot}`);
+      },
+
+      setSkillCooldown: (type: string, ms: number) => {
+        const sm = this.scene.skillManager;
+        if (!sm) { console.log('[Debug] setSkillCooldown: skillManager not ready'); return; }
+        sm.setSlotCooldown(type, ms);
+        console.log(`[Debug] setSkillCooldown: "${type}" -> ${ms}ms`);
+      },
+
+      getSkillCooldown: (slot: number): number => {
+        const sm = this.scene.skillManager;
+        if (!sm) { console.log('[Debug] getSkillCooldown: skillManager not ready'); return 0; }
+        const cd = sm.getSlotCooldownRemaining(slot);
+        console.log(`[Debug] getSkillCooldown(slot ${slot}): ${cd.toFixed(0)}ms remaining`);
+        return cd;
+      },
     };
   }
 
   private buildStateSnapshot(): GameState {
     const player = this.scene.player;
+    const sm = this.scene.skillManager;
+
+    // Build skill state maps
+    const skillStates: Record<string, string> = {};
+    const skillCooldowns: Record<string, number> = {};
+    if (sm) {
+      for (let i = 0; i < 2; i++) {
+        const type = sm.getSlotType(i);
+        const key = type ?? `slot${i}`;
+        skillStates[key] = sm.getSlotState(i);
+        skillCooldowns[key] = sm.getSlotCooldownRemaining(i);
+      }
+    }
+
     return {
       player: {
         x: player ? player.x : 0,
@@ -293,6 +370,9 @@ export class DebugManager {
         moveSpeed: this.scene.statsManager.getStat('moveSpeed'),
         speed: player ? player.speed : 0,
         currentRoom: this.scene.currentPlayerRoom ?? null,
+        playerSkills: sm ? sm.getOwnedSkillTypes() : [],
+        skillStates,
+        skillCooldowns,
       },
       dungeon: {
         floor: this.scene.floorManager?.currentFloor ?? 1,
