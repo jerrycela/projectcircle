@@ -10,6 +10,7 @@ import EventBus from '../systems/EventBus';
 import { CombatSystem } from '../systems/CombatSystem';
 import { LootSystem } from '../systems/LootSystem';
 import { StatsManager } from '../systems/StatsManager';
+import { Altar } from '../entities/Altar';
 
 export class GameScene extends Phaser.Scene {
   private debugManager?: DebugManager;
@@ -26,6 +27,7 @@ export class GameScene extends Phaser.Scene {
   public enemyGroup!: Phaser.Physics.Arcade.Group;
   public lootGroup!: Phaser.GameObjects.Group;
   public currentPlayerRoom: number | null = null;
+  private altar?: Altar;
 
   // Input state
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -129,12 +131,24 @@ export class GameScene extends Phaser.Scene {
     this.currentPlayerRoom = 0;
     this.spawnEnemiesInRoom(0);
 
+    // Spawn altar in ALTAR room (if any)
+    const altarRoom = this.rooms.find(r => r.state === RoomState.ALTAR);
+    if (altarRoom) {
+      const altarX = altarRoom.centerX * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2;
+      const altarY = altarRoom.centerY * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2;
+      this.altar = new Altar(this, altarX, altarY, this.player);
+    }
+
     // Loot group and system
     this.lootGroup = this.add.group();
     this.lootSystem = new LootSystem(this, this.player, this.lootGroup);
 
     // Combat system
     this.combatSystem = new CombatSystem(this, this.statsManager);
+
+    EventBus.on('altar-consumed', () => {
+      this.altar?.consume();
+    });
 
     // Player death handler
     EventBus.on('player-died', () => {
@@ -166,6 +180,7 @@ export class GameScene extends Phaser.Scene {
     EventBus.off('joystick-stop');
     EventBus.off('player-died');
     EventBus.off('gameplay-lock');
+    EventBus.off('altar-consumed');
   }
 
   update(time: number, delta: number): void {
@@ -198,6 +213,7 @@ export class GameScene extends Phaser.Scene {
     this.checkRoomClearing();
     this.combatSystem.update(time, delta);
     this.lootSystem.update();
+    this.altar?.update(time, delta);
     this.debugManager?.update();
   }
 

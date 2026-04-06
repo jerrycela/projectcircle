@@ -112,5 +112,12 @@ export class BootScene extends Phaser.Scene {
     attackArc.strokePath();
     attackArc.generateTexture('attack-arc', 60, 40);
     attackArc.destroy();
+
+    // altar: 48x48 white bordered circle
+    const altar = this.make.graphics({ x: 0, y: 0 }, false);
+    altar.lineStyle(3, 0xffffff);
+    altar.strokeCircle(24, 24, 22);
+    altar.generateTexture('altar', 48, 48);
+    altar.destroy();
   }
 }
