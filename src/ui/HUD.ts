@@ -100,6 +100,10 @@ export class HUD {
 
     const p = gameScene.player;
 
+    // Update floor label
+    const floor = gameScene.floorManager?.currentFloor ?? 1;
+    this.floorText.setText(`Floor ${floor}`);
+
     // Compute fill widths
     this.hpFillW = Math.max(0, (p.hp / p.maxHp) * HP_BAR_W);
     this.mpFillW = Math.max(0, (p.mp / p.maxMp) * MP_BAR_W);
