@@ -2,15 +2,12 @@ import Phaser from 'phaser';
 import EventBus from '../systems/EventBus';
 import { COMPANION_DEFS, COMPANION_CONFIG } from '../config';
 import type { GameScene } from '../scenes/GameScene';
+import { GOTHIC_COLORS, GOTHIC_FONTS, drawStoneFrame, drawStoneButton, drawGothicPanel } from './GothicTheme';
 
 const PANEL_W = 420;
 const PANEL_H = 700;
 
-const TEXT_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
-  fontSize: '12px',
-  color: '#ffffff',
-  fontFamily: 'monospace',
-};
+const TEXT_STYLE = GOTHIC_FONTS.BODY;
 
 export class CompanionPanel {
   private scene: Phaser.Scene;
@@ -46,20 +43,20 @@ export class CompanionPanel {
     const cy = this.scene.cameras.main.height / 2;
 
     // Overlay
-    const overlay = this.scene.add.rectangle(cx, cy, 450, 800, 0x000000, 0.6);
+    const overlay = this.scene.add.rectangle(cx, cy, 450, 800, 0x000000, 0.7);
     this.container.add(overlay);
 
     // Panel
-    const bg = this.scene.add.rectangle(cx, cy, PANEL_W, PANEL_H, 0x111111, 0.95);
-    bg.setStrokeStyle(2, 0x444444);
-    this.container.add(bg);
+    const panelGfx = this.scene.add.graphics();
+    drawGothicPanel(panelGfx, cx - PANEL_W / 2, cy - PANEL_H / 2, PANEL_W, PANEL_H);
+    this.container.add(panelGfx);
 
     const panelX = cx - PANEL_W / 2;
     const panelY = cy - PANEL_H / 2;
 
     // Title
     const title = this.scene.add.text(cx, panelY + 14, 'Companions', {
-      ...TEXT_STYLE, fontSize: '16px',
+      ...GOTHIC_FONTS.TITLE,
     });
     title.setOrigin(0.5, 0);
     this.container.add(title);
@@ -85,8 +82,8 @@ export class CompanionPanel {
       const comp = companions[i];
       const sx = startX + i * (slotW + 10);
 
-      const slotBg = this.scene.add.rectangle(sx, slotY + slotH / 2, slotW, slotH, 0x222222);
-      slotBg.setStrokeStyle(1, comp.unlocked ? comp.def.themeColor : 0x444444);
+      const slotBg = this.scene.add.rectangle(sx, slotY + slotH / 2, slotW, slotH, GOTHIC_COLORS.STONE_DARK);
+      slotBg.setStrokeStyle(1, comp.unlocked ? comp.def.themeColor : GOTHIC_COLORS.STONE_MID);
       this.container.add(slotBg);
 
       if (comp.unlocked) {
@@ -106,7 +103,7 @@ export class CompanionPanel {
         const barH = 6;
         const barX = sx - barW / 2;
         const barY = slotY + 65;
-        const barBg = this.scene.add.rectangle(barX + barW / 2, barY + barH / 2, barW, barH, 0x333333);
+        const barBg = this.scene.add.rectangle(barX + barW / 2, barY + barH / 2, barW, barH, GOTHIC_COLORS.STONE_MID);
         this.container.add(barBg);
 
         const ratio = comp.affection / COMPANION_CONFIG.AFFECTION_CAP;
@@ -120,7 +117,7 @@ export class CompanionPanel {
         slotBg.on('pointerup', () => this.showDetail(comp.def.id));
       } else {
         const q = this.scene.add.text(sx, slotY + 30, '???', {
-          ...TEXT_STYLE, fontSize: '14px', color: '#555555',
+          ...TEXT_STYLE, fontSize: '14px', color: `#${GOTHIC_COLORS.STONE_PRESSED.toString(16).padStart(6, '0')}`,
         });
         q.setOrigin(0.5, 0.5);
         this.container.add(q);
@@ -144,18 +141,23 @@ export class CompanionPanel {
     const stage = gameScene.companionManager.getCurrentStage(companionId);
     const highestFloor = gameScene.floorManager.highestFloor;
 
-    const overlay = this.scene.add.rectangle(cx, cy, 450, 800, 0x000000, 0.6);
+    const overlay = this.scene.add.rectangle(cx, cy, 450, 800, 0x000000, 0.7);
     this.container.add(overlay);
-    const bg = this.scene.add.rectangle(cx, cy, PANEL_W, PANEL_H, 0x111111, 0.95);
-    bg.setStrokeStyle(2, comp.def.themeColor);
-    this.container.add(bg);
+    const panelGfx = this.scene.add.graphics();
+    drawGothicPanel(panelGfx, cx - PANEL_W / 2, cy - PANEL_H / 2, PANEL_W, PANEL_H);
+    this.container.add(panelGfx);
+    // Colored accent border using theme color
+    const accentBorder = this.scene.add.rectangle(cx, cy, PANEL_W - 4, PANEL_H - 4);
+    accentBorder.setStrokeStyle(1, comp.def.themeColor);
+    accentBorder.setFillStyle(0x000000, 0);
+    this.container.add(accentBorder);
 
     const panelX = cx - PANEL_W / 2;
     const panelY = cy - PANEL_H / 2;
 
     // Back button
     const backBtn = this.scene.add.text(panelX + 16, panelY + 10, '< Back', {
-      ...TEXT_STYLE, fontSize: '14px', color: '#aaaaaa',
+      ...TEXT_STYLE, fontSize: '14px',
     });
     backBtn.setInteractive({ useHandCursor: true });
     backBtn.on('pointerup', () => this.renderOverview());
@@ -197,13 +199,13 @@ export class CompanionPanel {
     } else {
       const lockedBg = this.scene.add.rectangle(
         portraitX + portraitW / 2, portraitY + portraitH / 2,
-        portraitW, portraitH, 0x333333,
+        portraitW, portraitH, GOTHIC_COLORS.STONE_MID,
       );
-      lockedBg.setStrokeStyle(1, 0x555555);
+      lockedBg.setStrokeStyle(1, GOTHIC_COLORS.STONE_MID);
       this.container.add(lockedBg);
       const lockText = this.scene.add.text(
         portraitX + portraitW / 2, portraitY + portraitH / 2,
-        'Locked', { ...TEXT_STYLE, fontSize: '14px', color: '#666666' },
+        'Locked', { ...TEXT_STYLE, fontSize: '14px' },
       );
       lockText.setOrigin(0.5, 0.5);
       this.container.add(lockText);
@@ -220,7 +222,7 @@ export class CompanionPanel {
     });
     this.container.add(affLabel);
 
-    const affBarBg = this.scene.add.rectangle(rightX + affBarW / 2, affBarY + affBarH / 2, affBarW, affBarH, 0x333333);
+    const affBarBg = this.scene.add.rectangle(rightX + affBarW / 2, affBarY + affBarH / 2, affBarW, affBarH, GOTHIC_COLORS.STONE_MID);
     this.container.add(affBarBg);
     const ratio = comp.affection / COMPANION_CONFIG.AFFECTION_CAP;
     if (ratio > 0) {
@@ -263,7 +265,7 @@ export class CompanionPanel {
     const atCap = comp.affection >= COMPANION_CONFIG.AFFECTION_CAP;
 
     const giftTitle = this.scene.add.text(panelX + 20, giftY, 'Send Gifts', {
-      ...TEXT_STYLE, fontSize: '14px',
+      ...GOTHIC_FONTS.TITLE, fontSize: '14px',
     });
     this.container.add(giftTitle);
 
@@ -305,7 +307,7 @@ export class CompanionPanel {
     const text = this.scene.add.text(x, y, `[Gift] ${label}`, {
       ...TEXT_STYLE,
       fontSize: '11px',
-      color: enabled ? '#ffffff' : '#555555',
+      color: enabled ? '#d4c4a0' : `#${GOTHIC_COLORS.STONE_PRESSED.toString(16).padStart(6, '0')}`,
     });
     this.container.add(text);
 

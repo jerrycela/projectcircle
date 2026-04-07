@@ -6,6 +6,7 @@ import type { Player } from '../entities/Player';
 import type { SkillManager } from '../systems/SkillManager';
 import type { Altar } from '../entities/Altar';
 import EventBus from '../systems/EventBus';
+import { GOTHIC_COLORS, GOTHIC_FONTS, drawStoneFrame, drawStoneButton, drawGothicPanel } from './GothicTheme';
 
 type PanelPhase = 'SKILL_PICK' | 'SHOP' | 'CLOSED';
 
@@ -102,8 +103,8 @@ export class UpgradePanel {
 
     // Title
     const title = this.scene.add.text(width / 2, 80, 'Choose a Skill', {
-      fontSize: '24px', color: '#cc66ff', fontFamily: 'monospace',
-      stroke: '#000000', strokeThickness: 3,
+      ...GOTHIC_FONTS.TITLE,
+      fontSize: '24px',
     });
     title.setOrigin(0.5, 0.5);
     this.container.add(title);
@@ -127,13 +128,15 @@ export class UpgradePanel {
     const canReroll = rerollCost === 0 || this.player.gold >= rerollCost;
     const rerollLabel = this.rerollsUsed === 0 ? 'Reroll (Free)' : `Reroll (${rerollCost}G)`;
 
-    const rerollBg = this.scene.add.rectangle(width / 2 - 80, buttonY, 140, 40, 0x333333, canReroll ? 1.0 : 0.5);
-    rerollBg.setStrokeStyle(1, canReroll ? 0x9933ff : 0x666666);
+    const rerollGfx = this.scene.add.graphics();
+    drawStoneButton(rerollGfx, width / 2 - 80 - 70, buttonY - 20, 140, 40);
+    rerollGfx.setAlpha(canReroll ? 1.0 : 0.5);
+    this.container.add(rerollGfx);
+
+    const rerollHitArea = this.scene.add.rectangle(width / 2 - 80, buttonY, 140, 40, 0x000000, 0);
     if (canReroll) {
-      rerollBg.setInteractive({ useHandCursor: true });
-      rerollBg.on('pointerover', () => rerollBg.setFillStyle(0x555555));
-      rerollBg.on('pointerout', () => rerollBg.setFillStyle(0x333333));
-      rerollBg.on('pointerdown', () => {
+      rerollHitArea.setInteractive({ useHandCursor: true });
+      rerollHitArea.on('pointerdown', () => {
         if (rerollCost > 0) {
           this.player.gold -= rerollCost;
           EventBus.emit('player-gold-changed', this.player.gold);
@@ -143,28 +146,32 @@ export class UpgradePanel {
         this.showSkillPick(newPool);
       });
     }
-    this.container.add(rerollBg);
+    this.container.add(rerollHitArea);
 
     const rerollText = this.scene.add.text(width / 2 - 80, buttonY, rerollLabel, {
-      fontSize: '14px', color: canReroll ? '#cc66ff' : '#666666', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '14px',
+      color: canReroll ? '#c9a44a' : '#666666',
     });
     rerollText.setOrigin(0.5, 0.5);
     this.container.add(rerollText);
 
     // Skip button
-    const skipBg = this.scene.add.rectangle(width / 2 + 80, buttonY, 100, 40, 0x333333);
-    skipBg.setStrokeStyle(1, 0x666666);
-    skipBg.setInteractive({ useHandCursor: true });
-    skipBg.on('pointerover', () => skipBg.setFillStyle(0x555555));
-    skipBg.on('pointerout', () => skipBg.setFillStyle(0x333333));
-    skipBg.on('pointerdown', () => {
+    const skipGfx = this.scene.add.graphics();
+    drawStoneButton(skipGfx, width / 2 + 80 - 50, buttonY - 20, 100, 40);
+    this.container.add(skipGfx);
+
+    const skipHitArea = this.scene.add.rectangle(width / 2 + 80, buttonY, 100, 40, 0x000000, 0);
+    skipHitArea.setInteractive({ useHandCursor: true });
+    skipHitArea.on('pointerdown', () => {
       if (this.altar) this.altar.skillOffered = true;
       this.showShop();
     });
-    this.container.add(skipBg);
+    this.container.add(skipHitArea);
 
     const skipText = this.scene.add.text(width / 2 + 80, buttonY, 'Skip', {
-      fontSize: '16px', color: '#aaaaaa', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '16px',
     });
     skipText.setOrigin(0.5, 0.5);
     this.container.add(skipText);
@@ -177,28 +184,33 @@ export class UpgradePanel {
     const isOwned = this.skillManager.hasSkill(skillKey);
     const currentLevel = this.skillManager.getSkillLevel(skillKey);
 
-    const cardBg = this.scene.add.rectangle(cx, cy, w, h, 0x1a1a33, 1.0);
-    cardBg.setStrokeStyle(2, 0x9933ff);
+    const cardGfx = this.scene.add.graphics();
+    drawGothicPanel(cardGfx, cx - w / 2, cy - h / 2, w, h);
+    this.container.add(cardGfx);
+
+    const cardBg = this.scene.add.rectangle(cx, cy, w, h, 0x000000, 0);
     cardBg.setInteractive({ useHandCursor: true });
     this.container.add(cardBg);
 
     // Badge
     const badgeLabel = isOwned ? `Lv.${currentLevel} -> ${currentLevel + 1}` : 'NEW';
     const badgeText = this.scene.add.text(cx + w / 2 - 12, cy - h / 2 + 8, badgeLabel, {
-      fontSize: '10px', color: '#cc66ff', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.GOLD,
+      fontSize: '10px',
     });
     badgeText.setOrigin(1, 0);
     this.container.add(badgeText);
 
     // Name
     const nameText = this.scene.add.text(cx - w / 2 + 20, cy - 42, def.name, {
-      fontSize: '20px', color: '#cc66ff', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.TITLE,
+      fontSize: '20px',
     });
     this.container.add(nameText);
 
     // Description
     const descText = this.scene.add.text(cx - w / 2 + 20, cy - 12, def.description, {
-      fontSize: '13px', color: '#aaaacc', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
     });
     this.container.add(descText);
 
@@ -206,13 +218,16 @@ export class UpgradePanel {
     const cdSec = (def.cooldownMs / 1000).toFixed(0);
     const statsLine = `MP: ${def.mpCost} | CD: ${cdSec}s`;
     const statsText = this.scene.add.text(cx - w / 2 + 20, cy + 14, statsLine, {
-      fontSize: '12px', color: '#7777aa', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '12px',
+      color: '#a09080',
     });
     this.container.add(statsText);
 
     // FREE label
     const freeText = this.scene.add.text(cx + w / 2 - 20, cy + 40, 'FREE', {
-      fontSize: '16px', color: '#cc66ff', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.GOLD,
+      fontSize: '16px',
     });
     freeText.setOrigin(1, 0.5);
     this.container.add(freeText);
@@ -222,8 +237,16 @@ export class UpgradePanel {
       this.onSkillCardClicked(skillKey, cx, cy);
     });
 
-    cardBg.on('pointerover', () => cardBg.setFillStyle(0x2a2a44));
-    cardBg.on('pointerout', () => cardBg.setFillStyle(0x1a1a33));
+    cardBg.on('pointerover', () => {
+      cardGfx.clear();
+      cardGfx.fillStyle(GOTHIC_COLORS.STONE_SURFACE);
+      cardGfx.fillRect(cx - w / 2, cy - h / 2, w, h);
+      drawGothicPanel(cardGfx, cx - w / 2, cy - h / 2, w, h);
+    });
+    cardBg.on('pointerout', () => {
+      cardGfx.clear();
+      drawGothicPanel(cardGfx, cx - w / 2, cy - h / 2, w, h);
+    });
   }
 
   private onSkillCardClicked(skillKey: string, cx: number, cy: number): void {
@@ -263,8 +286,9 @@ export class UpgradePanel {
     this.container.add(bg);
 
     const title = this.scene.add.text(width / 2, 120, 'Replace which skill?', {
-      fontSize: '22px', color: '#ff6666', fontFamily: 'monospace',
-      stroke: '#000000', strokeThickness: 3,
+      ...GOTHIC_FONTS.TITLE,
+      fontSize: '22px',
+      color: '#' + GOTHIC_COLORS.TEXT_BLOOD.toString(16).padStart(6, '0'),
     });
     title.setOrigin(0.5, 0.5);
     this.container.add(title);
@@ -272,7 +296,8 @@ export class UpgradePanel {
     // New skill info
     const newDef = SKILL_DEFS[newSkillKey];
     const newInfo = this.scene.add.text(width / 2, 160, `New: ${newDef.name}`, {
-      fontSize: '16px', color: '#cc66ff', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.GOLD,
+      fontSize: '16px',
     });
     newInfo.setOrigin(0.5, 0.5);
     this.container.add(newInfo);
@@ -286,25 +311,39 @@ export class UpgradePanel {
       if (!slotDef) continue;
 
       const btnY = 240 + i * 100;
-      const btnBg = this.scene.add.rectangle(width / 2, btnY, 280, 70, 0x332222);
-      btnBg.setStrokeStyle(2, 0xff6666);
+      const btnGfx = this.scene.add.graphics();
+      drawGothicPanel(btnGfx, width / 2 - 140, btnY - 35, 280, 70);
+      this.container.add(btnGfx);
+
+      const btnBg = this.scene.add.rectangle(width / 2, btnY, 280, 70, 0x000000, 0);
       btnBg.setInteractive({ useHandCursor: true });
       this.container.add(btnBg);
 
       const slotText = this.scene.add.text(width / 2, btnY - 12, `Slot ${i + 1}: ${slotDef.name} Lv.${slotLevel}`, {
-        fontSize: '16px', color: '#ff9999', fontFamily: 'monospace',
+        ...GOTHIC_FONTS.BODY,
+        fontSize: '16px',
       });
       slotText.setOrigin(0.5, 0.5);
       this.container.add(slotText);
 
       const replaceLabel = this.scene.add.text(width / 2, btnY + 14, 'Replace', {
-        fontSize: '12px', color: '#ff6666', fontFamily: 'monospace',
+        ...GOTHIC_FONTS.BODY,
+        fontSize: '12px',
+        color: '#' + GOTHIC_COLORS.TEXT_BLOOD.toString(16).padStart(6, '0'),
       });
       replaceLabel.setOrigin(0.5, 0.5);
       this.container.add(replaceLabel);
 
-      btnBg.on('pointerover', () => btnBg.setFillStyle(0x443333));
-      btnBg.on('pointerout', () => btnBg.setFillStyle(0x332222));
+      btnBg.on('pointerover', () => {
+        btnGfx.clear();
+        btnGfx.fillStyle(GOTHIC_COLORS.STONE_SURFACE);
+        btnGfx.fillRect(width / 2 - 140, btnY - 35, 280, 70);
+        drawGothicPanel(btnGfx, width / 2 - 140, btnY - 35, 280, 70);
+      });
+      btnBg.on('pointerout', () => {
+        btnGfx.clear();
+        drawGothicPanel(btnGfx, width / 2 - 140, btnY - 35, 280, 70);
+      });
       btnBg.on('pointerdown', () => {
         this.skillManager.replaceSkill(i, newSkillKey);
         this.showFlash(width / 2, btnY - 60, `${newDef.name} acquired!`);
@@ -315,18 +354,20 @@ export class UpgradePanel {
 
     // Cancel button — return to skill panel with same cards
     const cancelY = 240 + GAME_CONFIG.SKILL_SLOT_COUNT * 100 + 20;
-    const cancelBg = this.scene.add.rectangle(width / 2, cancelY, 120, 40, 0x333333);
-    cancelBg.setStrokeStyle(1, 0x666666);
-    cancelBg.setInteractive({ useHandCursor: true });
-    cancelBg.on('pointerover', () => cancelBg.setFillStyle(0x555555));
-    cancelBg.on('pointerout', () => cancelBg.setFillStyle(0x333333));
-    cancelBg.on('pointerdown', () => {
+    const cancelGfx = this.scene.add.graphics();
+    drawStoneButton(cancelGfx, width / 2 - 60, cancelY - 20, 120, 40);
+    this.container.add(cancelGfx);
+
+    const cancelHitArea = this.scene.add.rectangle(width / 2, cancelY, 120, 40, 0x000000, 0);
+    cancelHitArea.setInteractive({ useHandCursor: true });
+    cancelHitArea.on('pointerdown', () => {
       this.showSkillPickWithCards(this.currentSkillCards);
     });
-    this.container.add(cancelBg);
+    this.container.add(cancelHitArea);
 
     const cancelText = this.scene.add.text(width / 2, cancelY, 'Cancel', {
-      fontSize: '16px', color: '#aaaaaa', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '16px',
     });
     cancelText.setOrigin(0.5, 0.5);
     this.container.add(cancelText);
@@ -343,8 +384,8 @@ export class UpgradePanel {
     this.container.add(bg);
 
     const title = this.scene.add.text(width / 2, 80, 'Choose a Skill', {
-      fontSize: '24px', color: '#cc66ff', fontFamily: 'monospace',
-      stroke: '#000000', strokeThickness: 3,
+      ...GOTHIC_FONTS.TITLE,
+      fontSize: '24px',
     });
     title.setOrigin(0.5, 0.5);
     this.container.add(title);
@@ -367,13 +408,15 @@ export class UpgradePanel {
     const canReroll = rerollCost === 0 || this.player.gold >= rerollCost;
     const rerollLabel = this.rerollsUsed === 0 ? 'Reroll (Free)' : `Reroll (${rerollCost}G)`;
 
-    const rerollBg = this.scene.add.rectangle(width / 2 - 80, buttonY, 140, 40, 0x333333, canReroll ? 1.0 : 0.5);
-    rerollBg.setStrokeStyle(1, canReroll ? 0x9933ff : 0x666666);
+    const rerollGfx2 = this.scene.add.graphics();
+    drawStoneButton(rerollGfx2, width / 2 - 80 - 70, buttonY - 20, 140, 40);
+    rerollGfx2.setAlpha(canReroll ? 1.0 : 0.5);
+    this.container.add(rerollGfx2);
+
+    const rerollHitArea2 = this.scene.add.rectangle(width / 2 - 80, buttonY, 140, 40, 0x000000, 0);
     if (canReroll) {
-      rerollBg.setInteractive({ useHandCursor: true });
-      rerollBg.on('pointerover', () => rerollBg.setFillStyle(0x555555));
-      rerollBg.on('pointerout', () => rerollBg.setFillStyle(0x333333));
-      rerollBg.on('pointerdown', () => {
+      rerollHitArea2.setInteractive({ useHandCursor: true });
+      rerollHitArea2.on('pointerdown', () => {
         if (rerollCost > 0) {
           this.player.gold -= rerollCost;
           EventBus.emit('player-gold-changed', this.player.gold);
@@ -383,28 +426,32 @@ export class UpgradePanel {
         this.showSkillPick(newPool);
       });
     }
-    this.container.add(rerollBg);
+    this.container.add(rerollHitArea2);
 
     const rerollText = this.scene.add.text(width / 2 - 80, buttonY, rerollLabel, {
-      fontSize: '14px', color: canReroll ? '#cc66ff' : '#666666', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '14px',
+      color: canReroll ? '#c9a44a' : '#666666',
     });
     rerollText.setOrigin(0.5, 0.5);
     this.container.add(rerollText);
 
     // Skip
-    const skipBg = this.scene.add.rectangle(width / 2 + 80, buttonY, 100, 40, 0x333333);
-    skipBg.setStrokeStyle(1, 0x666666);
-    skipBg.setInteractive({ useHandCursor: true });
-    skipBg.on('pointerover', () => skipBg.setFillStyle(0x555555));
-    skipBg.on('pointerout', () => skipBg.setFillStyle(0x333333));
-    skipBg.on('pointerdown', () => {
+    const skipGfx2 = this.scene.add.graphics();
+    drawStoneButton(skipGfx2, width / 2 + 80 - 50, buttonY - 20, 100, 40);
+    this.container.add(skipGfx2);
+
+    const skipHitArea2 = this.scene.add.rectangle(width / 2 + 80, buttonY, 100, 40, 0x000000, 0);
+    skipHitArea2.setInteractive({ useHandCursor: true });
+    skipHitArea2.on('pointerdown', () => {
       if (this.altar) this.altar.skillOffered = true;
       this.showShop();
     });
-    this.container.add(skipBg);
+    this.container.add(skipHitArea2);
 
     const skipText = this.scene.add.text(width / 2 + 80, buttonY, 'Skip', {
-      fontSize: '16px', color: '#aaaaaa', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '16px',
     });
     skipText.setOrigin(0.5, 0.5);
     this.container.add(skipText);
@@ -428,8 +475,10 @@ export class UpgradePanel {
 
     // Title
     const title = this.scene.add.text(width / 2, 60, 'UPGRADES', {
-      fontSize: '24px', color: '#ffcc00', fontFamily: 'monospace',
-      stroke: '#000000', strokeThickness: 3,
+      ...GOTHIC_FONTS.GOLD,
+      fontSize: '24px',
+      stroke: '#000000',
+      strokeThickness: 3,
     });
     title.setOrigin(0.5, 0.5);
     this.container.add(title);
@@ -456,21 +505,24 @@ export class UpgradePanel {
     // Gold display
     const goldY = gridStartY + 2 * (cellH + gapY) + cellH + 30;
     const goldText = this.scene.add.text(40, goldY, `Gold: ${this.player.gold}`, {
-      fontSize: '18px', color: '#ffcc00', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.GOLD,
+      fontSize: '18px',
     });
     this.container.add(goldText);
 
     // Close (X) button
-    const closeBg = this.scene.add.rectangle(width - 50, goldY, 50, 40, 0x333333);
-    closeBg.setStrokeStyle(1, 0x666666);
-    closeBg.setInteractive({ useHandCursor: true });
-    closeBg.on('pointerover', () => closeBg.setFillStyle(0x555555));
-    closeBg.on('pointerout', () => closeBg.setFillStyle(0x333333));
-    closeBg.on('pointerdown', () => this.closeSession('close-button'));
-    this.container.add(closeBg);
+    const closeGfx = this.scene.add.graphics();
+    drawStoneButton(closeGfx, width - 75, goldY - 20, 50, 40);
+    this.container.add(closeGfx);
+
+    const closeHitArea = this.scene.add.rectangle(width - 50, goldY, 50, 40, 0x000000, 0);
+    closeHitArea.setInteractive({ useHandCursor: true });
+    closeHitArea.on('pointerdown', () => this.closeSession('close-button'));
+    this.container.add(closeHitArea);
 
     const closeText = this.scene.add.text(width - 50, goldY, 'X', {
-      fontSize: '20px', color: '#ffffff', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '20px',
     });
     closeText.setOrigin(0.5, 0.5);
     this.container.add(closeText);
@@ -496,30 +548,38 @@ export class UpgradePanel {
     };
 
     // Determine state
-    let borderColor = 0x666666;
-    let alpha = 0.5;
+    let cellAlpha = 0.5;
     if (isMaxed) {
-      borderColor = 0x666666;
-      alpha = 0.7;
+      cellAlpha = 0.7;
     } else if (canAfford) {
-      borderColor = 0xffcc00;
-      alpha = 1.0;
+      cellAlpha = 1.0;
     }
 
     // Cell background
-    const cellBg = this.scene.add.rectangle(cx, cy, w, h, 0x222222, alpha);
-    cellBg.setStrokeStyle(2, borderColor);
+    const cellGfx = this.scene.add.graphics();
+    cellGfx.setAlpha(cellAlpha);
+    drawGothicPanel(cellGfx, cx - w / 2, cy - h / 2, w, h);
+    if (canAfford) {
+      // Gold highlight border on affordable cells
+      cellGfx.lineStyle(1, GOTHIC_COLORS.TEXT_GOLD);
+      cellGfx.strokeRect(cx - w / 2 + 1, cy - h / 2 + 1, w - 2, h - 2);
+    }
+    this.container.add(cellGfx);
+
+    const cellBg = this.scene.add.rectangle(cx, cy, w, h, 0x000000, 0);
     this.container.add(cellBg);
 
     // Icon placeholder (colored circle)
     const icon = this.scene.add.graphics();
-    icon.fillStyle(iconColors[upgradeKey] ?? 0xffffff, alpha);
+    icon.fillStyle(iconColors[upgradeKey] ?? 0xffffff, cellAlpha);
     icon.fillCircle(cx, cy - 30, 16);
     this.container.add(icon);
 
     // Name
     const nameText = this.scene.add.text(cx, cy + 2, def.name.replace('+', ''), {
-      fontSize: '11px', color: canAfford ? '#ffffff' : '#888888', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '11px',
+      color: canAfford ? '#d4c4a0' : '#888888',
     });
     nameText.setOrigin(0.5, 0.5);
     this.container.add(nameText);
@@ -528,16 +588,20 @@ export class UpgradePanel {
     const totalBonus = def.effectPerLevel[0] * level;
     const bonusLabel = `+${totalBonus}`;
     const bonusText = this.scene.add.text(cx, cy + 18, bonusLabel, {
-      fontSize: '10px', color: canAfford ? '#aaaaaa' : '#666666', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '10px',
+      color: canAfford ? '#c9a44a' : '#666666',
     });
     bonusText.setOrigin(0.5, 0.5);
     this.container.add(bonusText);
 
     // Cost or MAX
     const costLabel = isMaxed ? 'MAX' : `${cost}G`;
-    const costColor = isMaxed ? '#888888' : (canAfford ? '#ffcc00' : '#663300');
+    const costColor = isMaxed ? '#888888' : (canAfford ? '#c9a44a' : '#663300');
     const costText = this.scene.add.text(cx, cy + 36, costLabel, {
-      fontSize: '12px', color: costColor, fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '12px',
+      color: costColor,
     });
     costText.setOrigin(0.5, 0.5);
     this.container.add(costText);
@@ -545,7 +609,9 @@ export class UpgradePanel {
     // Level
     const levelLabel = `Lv.${level}/${def.maxLevel}`;
     const levelText = this.scene.add.text(cx, cy + 52, levelLabel, {
-      fontSize: '9px', color: '#666666', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '9px',
+      color: '#666666',
     });
     levelText.setOrigin(0.5, 0.5);
     this.container.add(levelText);
@@ -558,8 +624,20 @@ export class UpgradePanel {
     cellBg.setInteractive({ useHandCursor: canAfford });
 
     if (canAfford) {
-      cellBg.on('pointerover', () => cellBg.setFillStyle(0x333333));
-      cellBg.on('pointerout', () => cellBg.setFillStyle(0x222222));
+      cellBg.on('pointerover', () => {
+        cellGfx.clear();
+        cellGfx.fillStyle(GOTHIC_COLORS.STONE_SURFACE);
+        cellGfx.fillRect(cx - w / 2, cy - h / 2, w, h);
+        drawGothicPanel(cellGfx, cx - w / 2, cy - h / 2, w, h);
+        cellGfx.lineStyle(1, GOTHIC_COLORS.TEXT_GOLD);
+        cellGfx.strokeRect(cx - w / 2 + 1, cy - h / 2 + 1, w - 2, h - 2);
+      });
+      cellBg.on('pointerout', () => {
+        cellGfx.clear();
+        drawGothicPanel(cellGfx, cx - w / 2, cy - h / 2, w, h);
+        cellGfx.lineStyle(1, GOTHIC_COLORS.TEXT_GOLD);
+        cellGfx.strokeRect(cx - w / 2 + 1, cy - h / 2 + 1, w - 2, h - 2);
+      });
     }
 
     cellBg.on('pointerdown', () => {
@@ -632,8 +710,8 @@ export class UpgradePanel {
     this.lastFlashTime = now;
 
     const text = this.scene.add.text(x, y, message, {
-      fontSize: '14px', color: '#ffffff', fontFamily: 'monospace',
-      stroke: '#000000', strokeThickness: 2,
+      ...GOTHIC_FONTS.BODY,
+      fontSize: '14px',
     });
     text.setOrigin(0.5, 0.5);
     text.setDepth(310);
