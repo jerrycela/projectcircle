@@ -197,10 +197,11 @@ export class BootScene extends Phaser.Scene {
     enemyWarden.generateTexture('enemy-warden', 48, 48);
     enemyWarden.destroy();
 
-    // loot-token: 16x16 white filled circle (radius 6) placeholder for companion token
+    // loot-token: 16x16 white diamond shape for companion token (tinted at spawn)
     const lootToken = this.make.graphics({ x: 0, y: 0 }, false);
     lootToken.fillStyle(0xffffff);
-    lootToken.fillCircle(8, 8, 6);
+    lootToken.fillTriangle(8, 0, 16, 8, 8, 16);
+    lootToken.fillTriangle(8, 0, 0, 8, 8, 16);
     lootToken.generateTexture('loot-token', 16, 16);
     lootToken.destroy();
   }
