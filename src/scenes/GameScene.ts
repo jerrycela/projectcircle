@@ -359,6 +359,9 @@ export class GameScene extends Phaser.Scene {
     EventBus.off('show-rescue-button');
     EventBus.off('hide-rescue-button');
     this.companionManager?.destroy();
+    this.hostage = undefined;
+    this.hostageRoomData = null;
+    this.rescueButtonVisible = false;
     this.waterPools = [];
     this.torches = [];
   }
@@ -719,12 +722,14 @@ export class GameScene extends Phaser.Scene {
       }
     };
     // Poll via checkRoomClearing — piggyback on room state change
-    this.time.addEvent({
+    const timerEvent = this.time.addEvent({
       delay: 500,
       loop: true,
       callback: () => {
+        if (!this.rooms || !this.rooms[roomIndex]) { timerEvent.remove(); return; }
         if (this.rooms[roomIndex].state === RoomState.CLEARED) {
           clearCheck();
+          timerEvent.remove();
         }
       },
     });

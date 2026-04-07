@@ -157,7 +157,7 @@ export class CompanionManager {
     if (!cs) return;
     cs.tokens += count;
     this.save();
-    EventBus.emit('companion-token-collected', { companionId, tokens: cs.tokens });
+    EventBus.emit('companion-token-collected', { companionId, amount: count });
   }
 
   getCompanion(id: string): CompanionState & { def: CompanionDef } {
