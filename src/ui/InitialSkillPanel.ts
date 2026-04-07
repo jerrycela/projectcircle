@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SKILL_DEFS, GAME_CONFIG } from '../config';
 import type { SkillManager } from '../systems/SkillManager';
 import EventBus from '../systems/EventBus';
+import { GOTHIC_COLORS, GOTHIC_FONTS, drawStoneFrame, drawStoneButton, drawGothicPanel } from './GothicTheme';
 
 /**
  * Shows 3 random skills at the start of a new run.
@@ -53,15 +54,14 @@ export class InitialSkillPanel {
 
     // Title
     const title = this.scene.add.text(width / 2, 80, 'Choose Your Skill', {
-      fontSize: '24px', color: '#cc66ff', fontFamily: 'monospace',
-      stroke: '#000000', strokeThickness: 3,
+      ...GOTHIC_FONTS.TITLE, fontSize: '24px',
     });
     title.setOrigin(0.5, 0.5);
     this.container.add(title);
 
     // Subtitle
     const subtitle = this.scene.add.text(width / 2, 115, 'Pick one to begin', {
-      fontSize: '14px', color: '#8866aa', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY, fontSize: '14px',
     });
     subtitle.setOrigin(0.5, 0.5);
     this.container.add(subtitle);
@@ -83,8 +83,12 @@ export class InitialSkillPanel {
   private createSkillCard(cx: number, cy: number, w: number, h: number, skillKey: string): void {
     const def = SKILL_DEFS[skillKey];
 
-    const cardBg = this.scene.add.rectangle(cx, cy, w, h, 0x1a1a33, 1.0);
-    cardBg.setStrokeStyle(2, 0x9933ff);
+    const cardGfx = this.scene.add.graphics();
+    drawGothicPanel(cardGfx, cx - w / 2, cy - h / 2, w, h);
+    this.container.add(cardGfx);
+
+    const cardBg = this.scene.add.rectangle(cx, cy, w, h, 0x000000, 0);
+    cardBg.setStrokeStyle(2, GOTHIC_COLORS.STONE_MID);
     cardBg.setInteractive({ useHandCursor: true });
     this.container.add(cardBg);
 
@@ -99,13 +103,13 @@ export class InitialSkillPanel {
 
     // Name
     const nameText = this.scene.add.text(cx - w / 2 + 20, cy - 42, def.name, {
-      fontSize: '20px', color: '#cc66ff', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.TITLE, fontSize: '20px',
     });
     this.container.add(nameText);
 
     // Description
     const descText = this.scene.add.text(cx - w / 2 + 20, cy - 12, def.description, {
-      fontSize: '13px', color: '#aaaacc', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY, fontSize: '13px',
     });
     this.container.add(descText);
 
@@ -113,7 +117,7 @@ export class InitialSkillPanel {
     const cdSec = (def.cooldownMs / 1000).toFixed(0);
     const statsLine = `MP: ${def.mpCost} | CD: ${cdSec}s`;
     const statsText = this.scene.add.text(cx - w / 2 + 20, cy + 14, statsLine, {
-      fontSize: '12px', color: '#7777aa', fontFamily: 'monospace',
+      ...GOTHIC_FONTS.BODY, fontSize: '12px',
     });
     this.container.add(statsText);
 
@@ -137,8 +141,8 @@ export class InitialSkillPanel {
       this.onCardClicked(skillKey, cx, cy);
     });
 
-    cardBg.on('pointerover', () => cardBg.setFillStyle(0x2a2a44));
-    cardBg.on('pointerout', () => cardBg.setFillStyle(0x1a1a33));
+    cardBg.on('pointerover', () => { cardGfx.setAlpha(0.8); cardBg.setStrokeStyle(2, GOTHIC_COLORS.STONE_HIGHLIGHT); });
+    cardBg.on('pointerout', () => { cardGfx.setAlpha(1); cardBg.setStrokeStyle(2, GOTHIC_COLORS.STONE_MID); });
   }
 
   private onCardClicked(skillKey: string, cx: number, cy: number): void {
@@ -150,8 +154,7 @@ export class InitialSkillPanel {
 
     // Flash feedback (added to container so destroy() cleans it up)
     const flash = this.scene.add.text(cx, cy - 60, `${def.name} acquired!`, {
-      fontSize: '14px', color: '#ffffff', fontFamily: 'monospace',
-      stroke: '#000000', strokeThickness: 2,
+      ...GOTHIC_FONTS.BODY, fontSize: '14px',
     });
     flash.setOrigin(0.5, 0.5);
     flash.setDepth(310);

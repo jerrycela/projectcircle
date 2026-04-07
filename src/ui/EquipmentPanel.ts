@@ -7,16 +7,13 @@ import {
 } from '../config';
 import type { EquipmentSlot } from '../config';
 import type { GameScene } from '../scenes/GameScene';
+import { GOTHIC_COLORS, GOTHIC_FONTS, drawStoneFrame, drawStoneButton, drawGothicPanel } from './GothicTheme';
 
 const PANEL_W = 380;
 const PANEL_H = 400;
 const ROW_H = 80;
 
-const TEXT_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
-  fontSize: '12px',
-  color: '#ffffff',
-  fontFamily: 'monospace',
-};
+const TEXT_STYLE = GOTHIC_FONTS.BODY;
 
 const STAT_LABELS: Record<string, string> = {
   attackMin: 'ATK Min',
@@ -66,19 +63,19 @@ export class EquipmentPanel {
     this.container.removeAll(true);
 
     // Overlay
-    const overlay = this.scene.add.rectangle(cx, cy, 450, 800, 0x000000, 0.6);
+    const overlay = this.scene.add.rectangle(cx, cy, 450, 800, 0x000000, 0.7);
     this.container.add(overlay);
 
     // Panel
     const panelX = cx - PANEL_W / 2;
     const panelY = cy - PANEL_H / 2;
-    const bg = this.scene.add.rectangle(cx, cy, PANEL_W, PANEL_H, 0x111111, 0.95);
-    bg.setStrokeStyle(2, 0x444444);
-    this.container.add(bg);
+    const panelGfx = this.scene.add.graphics();
+    drawGothicPanel(panelGfx, panelX, panelY, PANEL_W, PANEL_H);
+    this.container.add(panelGfx);
 
     // Title
     const title = this.scene.add.text(cx, panelY + 14, 'My Equipment', {
-      ...TEXT_STYLE,
+      ...GOTHIC_FONTS.TITLE,
       fontSize: '16px',
     });
     title.setOrigin(0.5, 0);
@@ -88,7 +85,7 @@ export class EquipmentPanel {
     const closeBtn = this.scene.add.text(panelX + PANEL_W - 16, panelY + 10, 'X', {
       ...TEXT_STYLE,
       fontSize: '18px',
-      color: '#ff4444',
+      color: `#${GOTHIC_COLORS.TEXT_BLOOD.toString(16).padStart(6, '0')}`,
     });
     closeBtn.setOrigin(0.5, 0);
     closeBtn.setInteractive({ useHandCursor: true });
@@ -107,25 +104,29 @@ export class EquipmentPanel {
 
   private createRow(x: number, y: number, width: number, slot: EquipmentSlot, gameScene: GameScene): void {
     const item = gameScene.equipmentManager.getEquipped(slot);
-    const rarityColor = item ? EQUIPMENT_RARITY_DEFS[item.rarity].color : 0x444444;
+    const rarityColor = item ? EQUIPMENT_RARITY_DEFS[item.rarity].color : GOTHIC_COLORS.STONE_MID;
 
     // Row background
-    const rowBg = this.scene.add.rectangle(x + width / 2, y + ROW_H / 2, width, ROW_H, 0x1a1a1a);
-    rowBg.setStrokeStyle(1, rarityColor);
-    this.container.add(rowBg);
+    const rowGfx = this.scene.add.graphics();
+    rowGfx.fillStyle(GOTHIC_COLORS.STONE_DARK);
+    rowGfx.fillRect(x, y, width, ROW_H);
+    drawStoneFrame(rowGfx, x, y, width, ROW_H);
+    rowGfx.lineStyle(1, rarityColor);
+    rowGfx.strokeRect(x + 1, y + 1, width - 2, ROW_H - 2);
+    this.container.add(rowGfx);
 
     // Slot label
     const slotText = this.scene.add.text(x + 10, y + 6, `[${EQUIPMENT_SLOT_LABELS[slot]}]`, {
       ...TEXT_STYLE,
       fontSize: '11px',
-      color: '#888888',
+      color: `#${GOTHIC_COLORS.STONE_PRESSED.toString(16).padStart(6, '0')}`,
     });
     this.container.add(slotText);
 
     if (!item) {
       const emptyText = this.scene.add.text(x + 100, y + 6, '(empty)', {
         ...TEXT_STYLE,
-        color: '#555555',
+        color: `#${GOTHIC_COLORS.STONE_MID.toString(16).padStart(6, '0')}`,
       });
       this.container.add(emptyText);
       return;
@@ -148,7 +149,7 @@ export class EquipmentPanel {
     const statsText = this.scene.add.text(x + 10, y + 28, statParts.join('  '), {
       ...TEXT_STYLE,
       fontSize: '10px',
-      color: '#cccccc',
+      color: `#${GOTHIC_COLORS.TEXT_PARCHMENT.toString(16).padStart(6, '0')}`,
     });
     this.container.add(statsText);
 
@@ -156,7 +157,7 @@ export class EquipmentPanel {
     const unequipBtn = this.scene.add.text(x + width - 30, y + 6, 'X', {
       ...TEXT_STYLE,
       fontSize: '16px',
-      color: '#ff6666',
+      color: `#${GOTHIC_COLORS.TEXT_BLOOD.toString(16).padStart(6, '0')}`,
     });
     unequipBtn.setOrigin(0.5, 0);
     unequipBtn.setInteractive({ useHandCursor: true });

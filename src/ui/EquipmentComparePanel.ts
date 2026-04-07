@@ -8,6 +8,7 @@ import {
 } from '../config';
 import type { Loot } from '../entities/Loot';
 import type { GameScene } from '../scenes/GameScene';
+import { GOTHIC_COLORS, GOTHIC_FONTS, drawStoneFrame, drawStoneButton, drawGothicPanel } from './GothicTheme';
 
 const PANEL_W = 400;
 const PANEL_H = 360;
@@ -17,11 +18,7 @@ const CARD_GAP = 10;
 const BTN_W = 140;
 const BTN_H = 44;
 
-const TEXT_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
-  fontSize: '12px',
-  color: '#ffffff',
-  fontFamily: 'monospace',
-};
+const TEXT_STYLE = GOTHIC_FONTS.BODY;
 
 const STAT_LABELS: Record<string, string> = {
   attackMin: 'ATK Min',
@@ -68,19 +65,19 @@ export class EquipmentComparePanel {
     this.container.removeAll(true);
 
     // Background overlay
-    const overlay = this.scene.add.rectangle(cx, cy, 450, 800, 0x000000, 0.6);
+    const overlay = this.scene.add.rectangle(cx, cy, 450, 800, 0x000000, 0.7);
     this.container.add(overlay);
 
     // Panel background
     const panelX = cx - PANEL_W / 2;
     const panelY = cy - PANEL_H / 2;
-    const bg = this.scene.add.rectangle(cx, cy, PANEL_W, PANEL_H, 0x111111, 0.95);
-    bg.setStrokeStyle(2, 0x444444);
-    this.container.add(bg);
+    const panelGfx = this.scene.add.graphics();
+    drawGothicPanel(panelGfx, panelX, panelY, PANEL_W, PANEL_H);
+    this.container.add(panelGfx);
 
     // Title
     const title = this.scene.add.text(cx, panelY + 16, 'Equipment Compare', {
-      ...TEXT_STYLE,
+      ...GOTHIC_FONTS.TITLE,
       fontSize: '16px',
     });
     title.setOrigin(0.5, 0);
@@ -90,7 +87,7 @@ export class EquipmentComparePanel {
     const slotLabel = this.scene.add.text(cx, panelY + 38, EQUIPMENT_SLOT_LABELS[newItem.slot], {
       ...TEXT_STYLE,
       fontSize: '11px',
-      color: '#aaaaaa',
+      color: `#${GOTHIC_COLORS.STONE_PRESSED.toString(16).padStart(6, '0')}`,
     });
     slotLabel.setOrigin(0.5, 0);
     this.container.add(slotLabel);
@@ -105,12 +102,12 @@ export class EquipmentComparePanel {
 
     // Buttons
     const btnsY = cardsY + CARD_H + 16;
-    this.createButton(cx - BTN_W / 2 - 10, btnsY, 'Equip', 0x006600, () => {
+    this.createButton(cx - BTN_W / 2 - 10, btnsY, 'Equip', 'gold', () => {
       gameScene.equipmentManager.equip(newItem);
       loot.collect();
       this.hide();
     });
-    this.createButton(cx + BTN_W / 2 + 10, btnsY, 'Discard', 0x660000, () => {
+    this.createButton(cx + BTN_W / 2 + 10, btnsY, 'Discard', 'blood', () => {
       loot.collect();
       this.hide();
     });
@@ -119,18 +116,23 @@ export class EquipmentComparePanel {
   };
 
   private createCard(cx: number, topY: number, item: EquipmentItem | null, label: string): void {
-    const rarityColor = item ? EQUIPMENT_RARITY_DEFS[item.rarity].color : 0x444444;
+    const rarityColor = item ? EQUIPMENT_RARITY_DEFS[item.rarity].color : GOTHIC_COLORS.STONE_MID;
 
     // Card background
-    const cardBg = this.scene.add.rectangle(cx, topY + CARD_H / 2, CARD_W, CARD_H, 0x222222);
-    cardBg.setStrokeStyle(2, rarityColor);
-    this.container.add(cardBg);
+    const cardX = cx - CARD_W / 2;
+    const cardGfx = this.scene.add.graphics();
+    cardGfx.fillStyle(GOTHIC_COLORS.STONE_DARK);
+    cardGfx.fillRect(cardX, topY, CARD_W, CARD_H);
+    drawStoneFrame(cardGfx, cardX, topY, CARD_W, CARD_H);
+    cardGfx.lineStyle(2, rarityColor);
+    cardGfx.strokeRect(cardX + 1, topY + 1, CARD_W - 2, CARD_H - 2);
+    this.container.add(cardGfx);
 
     // Label (Equipped / New Drop)
     const headerText = this.scene.add.text(cx, topY + 8, label, {
       ...TEXT_STYLE,
       fontSize: '10px',
-      color: '#888888',
+      color: `#${GOTHIC_COLORS.STONE_PRESSED.toString(16).padStart(6, '0')}`,
     });
     headerText.setOrigin(0.5, 0);
     this.container.add(headerText);
@@ -138,7 +140,7 @@ export class EquipmentComparePanel {
     if (!item) {
       const emptyText = this.scene.add.text(cx, topY + CARD_H / 2, 'None', {
         ...TEXT_STYLE,
-        color: '#666666',
+        color: `#${GOTHIC_COLORS.STONE_MID.toString(16).padStart(6, '0')}`,
       });
       emptyText.setOrigin(0.5, 0.5);
       this.container.add(emptyText);
@@ -169,7 +171,7 @@ export class EquipmentComparePanel {
       const subtypeText = this.scene.add.text(cx, topY + 58, `${wtd.label} | SPD ${wtd.attackSpeedMult}x RNG ${wtd.rangeMult}x DMG ${wtd.damageMult}x`, {
         ...TEXT_STYLE,
         fontSize: '9px',
-        color: '#aaaaaa',
+        color: `#${GOTHIC_COLORS.STONE_PRESSED.toString(16).padStart(6, '0')}`,
       });
       subtypeText.setOrigin(0.5, 0);
       this.container.add(subtypeText);
@@ -190,29 +192,40 @@ export class EquipmentComparePanel {
     }
   }
 
-  private createButton(cx: number, cy: number, label: string, color: number, callback: () => void): void {
-    const btn = this.scene.add.rectangle(cx, cy, BTN_W, BTN_H, color);
-    btn.setStrokeStyle(1, 0xffffff);
-    btn.setInteractive({ useHandCursor: true });
+  private createButton(cx: number, cy: number, label: string, style: 'gold' | 'blood', callback: () => void): void {
+    const btnX = cx - BTN_W / 2;
+    const btnY = cy - BTN_H / 2;
+
+    const btnGfx = this.scene.add.graphics();
+    drawStoneButton(btnGfx, btnX, btnY, BTN_W, BTN_H, false);
+    btnGfx.setInteractive(new Phaser.Geom.Rectangle(btnX, btnY, BTN_W, BTN_H), Phaser.Geom.Rectangle.Contains);
+
+    const textColor = style === 'gold'
+      ? `#${GOTHIC_COLORS.TEXT_GOLD.toString(16).padStart(6, '0')}`
+      : `#${GOTHIC_COLORS.TEXT_BLOOD.toString(16).padStart(6, '0')}`;
 
     const btnText = this.scene.add.text(cx, cy, label, {
-      ...TEXT_STYLE,
+      ...GOTHIC_FONTS.BODY,
       fontSize: '14px',
+      color: textColor,
     });
     btnText.setOrigin(0.5, 0.5);
 
-    btn.on('pointerdown', () => {
-      btn.setScale(0.95);
+    btnGfx.on('pointerdown', () => {
+      btnGfx.clear();
+      drawStoneButton(btnGfx, btnX, btnY, BTN_W, BTN_H, true);
     });
-    btn.on('pointerup', () => {
-      btn.setScale(1);
+    btnGfx.on('pointerup', () => {
+      btnGfx.clear();
+      drawStoneButton(btnGfx, btnX, btnY, BTN_W, BTN_H, false);
       callback();
     });
-    btn.on('pointerout', () => {
-      btn.setScale(1);
+    btnGfx.on('pointerout', () => {
+      btnGfx.clear();
+      drawStoneButton(btnGfx, btnX, btnY, BTN_W, BTN_H, false);
     });
 
-    this.container.add([btn, btnText]);
+    this.container.add([btnGfx, btnText]);
   }
 
   private hide(): void {

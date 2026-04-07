@@ -2,9 +2,11 @@ import Phaser from 'phaser';
 import { SKILL_DEFS } from '../config';
 import EventBus from '../systems/EventBus';
 import type { SkillSlotState } from '../systems/SkillManager';
+import { GOTHIC_COLORS, drawStoneCircle } from './GothicTheme';
 
-const VISUAL_RADIUS = 40;   // 80px diameter visual
-const TOUCH_RADIUS = 50;    // 100px diameter hit zone
+const VISUAL_RADIUS = 25;   // 50px diameter visual
+const TOUCH_RADIUS = 30;    // 60px hit zone
+const PRESSED_RADIUS = 22;  // P2 修正: redraw smaller instead of setScale
 
 export class SkillButton {
   private scene: Phaser.Scene;
@@ -49,17 +51,17 @@ export class SkillButton {
     this.overlayGraphics.setDepth(22);
 
     this.plusText = scene.add.text(x, y, '+', {
-      fontSize: '28px',
-      color: '#ffffff',
+      fontSize: '20px',
+      color: '#d4c4a0',
       fontFamily: 'monospace',
     });
     this.plusText.setOrigin(0.5, 0.5);
     this.plusText.setDepth(23);
     this.plusText.setAlpha(0.6);
 
-    this.mpText = scene.add.text(x, y + VISUAL_RADIUS + 10, '', {
-      fontSize: '12px',
-      color: '#00ccff',
+    this.mpText = scene.add.text(x, y + VISUAL_RADIUS + 8, '', {
+      fontSize: '10px',
+      color: '#d4c4a0',
       fontFamily: 'monospace',
     });
     this.mpText.setOrigin(0.5, 0.5);
@@ -114,11 +116,9 @@ export class SkillButton {
   }
 
   private drawEmpty(): void {
-    // Dark circle, 40% alpha
-    this.bgGraphics.fillStyle(0x222222, 0.4);
+    this.bgGraphics.fillStyle(GOTHIC_COLORS.STONE_DARK, 0.4);
     this.bgGraphics.fillCircle(this.x, this.y, VISUAL_RADIUS);
-    this.bgGraphics.lineStyle(2, 0x555555, 0.4);
-    this.bgGraphics.strokeCircle(this.x, this.y, VISUAL_RADIUS);
+    drawStoneCircle(this.bgGraphics, this.x, this.y, VISUAL_RADIUS);
 
     this.plusText.setVisible(true);
     this.plusText.setAlpha(0.4);
@@ -127,17 +127,16 @@ export class SkillButton {
 
   private drawReady(): void {
     const alpha = this.currentMpEnough ? 1.0 : 0.5;
+    // P2 修正: press feedback via smaller radius, not setScale
+    const r = this.isPressed ? PRESSED_RADIUS : VISUAL_RADIUS;
 
-    // Background circle
-    this.bgGraphics.fillStyle(0x333333, alpha);
-    this.bgGraphics.fillCircle(this.x, this.y, VISUAL_RADIUS);
-    this.bgGraphics.lineStyle(2, this.currentMpEnough ? 0x00ccff : 0x663333, alpha);
-    this.bgGraphics.strokeCircle(this.x, this.y, VISUAL_RADIUS);
+    this.bgGraphics.fillStyle(GOTHIC_COLORS.STONE_SURFACE, alpha);
+    this.bgGraphics.fillCircle(this.x, this.y, r);
+    drawStoneCircle(this.bgGraphics, this.x, this.y, r);
 
-    // Press feedback — darken and scale handled via graphics alpha
-    if (this.isPressed) {
-      this.bgGraphics.fillStyle(0x000000, 0.4);
-      this.bgGraphics.fillCircle(this.x, this.y, VISUAL_RADIUS);
+    if (!this.currentMpEnough) {
+      this.bgGraphics.lineStyle(2, GOTHIC_COLORS.TEXT_BLOOD, 0.8);
+      this.bgGraphics.strokeCircle(this.x, this.y, r + 1);
     }
 
     this.plusText.setVisible(false);
@@ -148,18 +147,16 @@ export class SkillButton {
       const def = SKILL_DEFS[this.currentType];
       if (def) {
         this.mpText.setText(`${def.mpCost} MP`);
-        this.mpText.setColor(this.currentMpEnough ? '#00ccff' : '#ff3333');
+        this.mpText.setColor(this.currentMpEnough ? '#d4c4a0' : '#8b0000');
         this.mpText.setVisible(true);
       }
     }
   }
 
   private drawCasting(): void {
-    // Grayed out
-    this.bgGraphics.fillStyle(0x333333, 0.4);
+    this.bgGraphics.fillStyle(GOTHIC_COLORS.STONE_DARK, 0.4);
     this.bgGraphics.fillCircle(this.x, this.y, VISUAL_RADIUS);
-    this.bgGraphics.lineStyle(2, 0x555555, 0.4);
-    this.bgGraphics.strokeCircle(this.x, this.y, VISUAL_RADIUS);
+    drawStoneCircle(this.bgGraphics, this.x, this.y, VISUAL_RADIUS);
 
     this.plusText.setVisible(false);
     this.drawSkillIcon(0.4);
@@ -167,11 +164,9 @@ export class SkillButton {
   }
 
   private drawCooldown(): void {
-    // Background
-    this.bgGraphics.fillStyle(0x333333, 1.0);
+    this.bgGraphics.fillStyle(GOTHIC_COLORS.STONE_SURFACE, 1.0);
     this.bgGraphics.fillCircle(this.x, this.y, VISUAL_RADIUS);
-    this.bgGraphics.lineStyle(2, 0x555555, 1.0);
-    this.bgGraphics.strokeCircle(this.x, this.y, VISUAL_RADIUS);
+    drawStoneCircle(this.bgGraphics, this.x, this.y, VISUAL_RADIUS);
 
     this.plusText.setVisible(false);
     this.drawSkillIcon(0.6);
@@ -181,7 +176,7 @@ export class SkillButton {
       const startAngle = -Math.PI / 2; // top
       const endAngle = startAngle + this.currentCooldownRatio * Math.PI * 2;
 
-      this.overlayGraphics.fillStyle(0x000000, 0.65);
+      this.overlayGraphics.fillStyle(0x2a1a0a, 0.7); // dark brown
       this.overlayGraphics.beginPath();
       this.overlayGraphics.moveTo(this.x, this.y);
       this.overlayGraphics.arc(this.x, this.y, VISUAL_RADIUS, startAngle, endAngle, false);
@@ -263,9 +258,6 @@ export class SkillButton {
   private onPointerDown(): void {
     if (this.currentState === 'READY' && this.currentMpEnough) {
       this.isPressed = true;
-      this.bgGraphics.setAlpha(0.9);
-      this.bgGraphics.setScale(0.9);
-      this.iconGraphics.setScale(0.9);
       this.redraw();
       EventBus.emit('skill-button-pressed', this.slotIndex);
     } else if (this.currentState !== 'EMPTY') {
@@ -277,9 +269,6 @@ export class SkillButton {
   private onPointerUp(): void {
     if (this.isPressed) {
       this.isPressed = false;
-      this.bgGraphics.setAlpha(1.0);
-      this.bgGraphics.setScale(1.0);
-      this.iconGraphics.setScale(1.0);
       this.redraw();
     }
   }
