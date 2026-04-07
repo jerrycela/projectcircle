@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
-import { GAME_CONFIG, EQUIPMENT_SLOTS, EQUIPMENT_RARITY_DEFS } from '../config';
+import { GAME_CONFIG, EQUIPMENT_SLOTS, EQUIPMENT_RARITY_DEFS, TOKEN_DROP_TABLE, COMPANION_DEFS } from '../config';
 import { Loot, LootType } from '../entities/Loot';
 import type { LootType as LootTypeT } from '../entities/Loot';
 import type { Player } from '../entities/Player';
 import type { Enemy } from '../entities/Enemy';
 import EventBus from './EventBus';
 import type { EquipmentManager } from './EquipmentManager';
+import type { CompanionManager } from './CompanionManager';
 
 const EQUIPMENT_RARITIES = ['white', 'green', 'blue', 'purple'] as const;
 type EquipmentRarity = typeof EQUIPMENT_RARITIES[number];
@@ -40,12 +41,14 @@ export class LootSystem {
   // Track loot items currently being pulled to avoid duplicate tweens
   private pulling: Set<Loot> = new Set();
   private equipmentManager?: EquipmentManager;
+  private companionManager?: CompanionManager;
 
-  constructor(scene: Phaser.Scene, player: Player, lootGroup: Phaser.GameObjects.Group, equipmentManager?: EquipmentManager) {
+  constructor(scene: Phaser.Scene, player: Player, lootGroup: Phaser.GameObjects.Group, equipmentManager?: EquipmentManager, companionManager?: CompanionManager) {
     this.scene = scene;
     this.player = player;
     this.lootGroup = lootGroup;
     this.equipmentManager = equipmentManager;
+    this.companionManager = companionManager;
 
     EventBus.on('enemy-killed', this.onEnemyKilled, this);
   }
@@ -78,6 +81,40 @@ export class LootSystem {
 
       const loot = this.spawnLoot(baseX + ox, baseY + oy, LootType.equipment, 0, rarity);
       loot.equipmentData = item;
+    }
+
+    this.rollTokenDrops(enemy, baseX, baseY);
+  }
+
+  private rollTokenDrops(enemy: Enemy, baseX: number, baseY: number): void {
+    const floor = (this.scene as any).floorManager?.currentFloor ?? 1;
+    const enemyElement = (enemy as any).config?.element ?? null;
+    const isElite = (enemy as any).config?.isElite ?? false;
+
+    for (const cond of TOKEN_DROP_TABLE) {
+      let matches = false;
+      if (cond.check === 'element') {
+        matches = enemyElement === cond.element;
+      } else if (cond.check === 'any') {
+        matches = true;
+      } else if (cond.check === 'elite') {
+        matches = isElite;
+      } else if (cond.check === 'floor-any') {
+        matches = floor >= (cond.minFloor ?? 1);
+      } else if (cond.check === 'floor-elite') {
+        matches = isElite && floor >= (cond.minFloor ?? 1);
+      }
+
+      if (matches && Math.random() < cond.dropRate) {
+        const def = COMPANION_DEFS.find((d: any) => d.id === cond.companionId);
+        const ox = Phaser.Math.Between(-10, 10);
+        const oy = Phaser.Math.Between(-10, 10);
+        const loot = this.spawnLoot(baseX + ox, baseY + oy, LootType.companionToken, 1);
+        loot.companionId = cond.companionId;
+        if (def) {
+          loot.setTint(def.themeColor);
+        }
+      }
     }
   }
 
@@ -203,6 +240,12 @@ export class LootSystem {
 
       case LootType.equipment:
         // Handled by equipment-pickup event in update()
+        break;
+
+      case LootType.companionToken:
+        if (loot.companionId && this.companionManager) {
+          this.companionManager.addTokens(loot.companionId, loot.value);
+        }
         break;
     }
   }

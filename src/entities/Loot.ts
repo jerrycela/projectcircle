@@ -10,6 +10,7 @@ export const LootType = {
   cloth: 'cloth',
   healthOrb: 'healthOrb',
   equipment: 'equipment',
+  companionToken: 'companionToken',
 } as const;
 
 export type LootType = typeof LootType[keyof typeof LootType];
@@ -21,6 +22,7 @@ const TEXTURE_MAP: Record<LootType, string> = {
   cloth: 'loot-cloth',
   healthOrb: 'loot-health-orb',
   equipment: 'loot-equipment',
+  companionToken: 'loot-token',
 };
 
 export class Loot extends Phaser.GameObjects.Image {
@@ -28,6 +30,7 @@ export class Loot extends Phaser.GameObjects.Image {
   public value: number;
   public rarity?: string;
   public equipmentData?: EquipmentItem;
+  public companionId?: string;
 
   private bobTween?: Phaser.Tweens.Tween;
 

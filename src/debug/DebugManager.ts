@@ -58,6 +58,14 @@ interface GameState {
     enemyElements: Record<string, number>;
     hazards: { waterPools: number; torches: number };
   };
+  companions: {
+    [id: string]: {
+      unlocked: boolean;
+      affection: number;
+      tokens: number;
+      stage: number;
+    };
+  };
 }
 
 interface DebugAPI {
@@ -105,6 +113,11 @@ interface DebugAPI {
   clearElements(): void;
   triggerReaction(type: string): void;
   listHazards(): void;
+  // Companion debug commands
+  unlockCompanion(id: string): void;
+  setAffection(id: string, value: number): void;
+  giveToken(id: string, count: number): void;
+  unlockAllCompanions(): void;
 }
 
 declare global {
@@ -538,6 +551,24 @@ export class DebugManager {
           console.log(`  Torch at (${t.x.toFixed(0)}, ${t.y.toFixed(0)})`);
         }
       },
+
+      // ---- Companion commands
+      unlockCompanion: (id: string) => {
+        (this.scene as any).companionManager?.debugUnlock(id);
+        console.log(`[Debug] Unlocked companion: ${id}`);
+      },
+      setAffection: (id: string, value: number) => {
+        (this.scene as any).companionManager?.debugSetAffection(id, value);
+        console.log(`[Debug] Set ${id} affection to ${value}`);
+      },
+      giveToken: (id: string, count: number) => {
+        (this.scene as any).companionManager?.debugGiveTokens(id, count);
+        console.log(`[Debug] Gave ${count} tokens to ${id}`);
+      },
+      unlockAllCompanions: () => {
+        (this.scene as any).companionManager?.debugUnlockAll();
+        console.log('[Debug] All companions unlocked at max affection');
+      },
     };
   }
 
@@ -640,6 +671,21 @@ export class DebugManager {
             torches: this.scene.torches?.length ?? 0,
           },
         };
+      })(),
+      companions: (() => {
+        const result: GameState['companions'] = {};
+        const cm = (this.scene as any).companionManager;
+        if (cm) {
+          for (const comp of cm.getAllCompanions()) {
+            result[comp.def.id] = {
+              unlocked: comp.unlocked,
+              affection: comp.affection,
+              tokens: comp.tokens,
+              stage: cm.getCurrentStage(comp.def.id),
+            };
+          }
+        }
+        return result;
       })(),
     };
   }

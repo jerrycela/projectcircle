@@ -42,6 +42,7 @@ export class HUD {
   private floorText: Phaser.GameObjects.Text;
 
   private equipBtn: Phaser.GameObjects.Text;
+  private companionBtn!: Phaser.GameObjects.Text;
 
   // Skill buttons
   private skillButton0: SkillButton;
@@ -119,6 +120,19 @@ export class HUD {
     this.equipBtn.setInteractive({ useHandCursor: true });
     this.equipBtn.on('pointerup', () => {
       EventBus.emit('show-equipment-panel');
+    });
+
+    this.companionBtn = scene.add.text(
+      camW - GOLD_PADDING,
+      62,
+      '[Companions]',
+      { ...TEXT_STYLE, fontSize: '13px', color: '#ffaacc' },
+    );
+    this.companionBtn.setOrigin(1, 0);
+    this.companionBtn.setDepth(11);
+    this.companionBtn.setInteractive({ useHandCursor: true });
+    this.companionBtn.on('pointerup', () => {
+      EventBus.emit('show-companion-panel');
     });
   }
 

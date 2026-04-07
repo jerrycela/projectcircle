@@ -189,5 +189,20 @@ export class BootScene extends Phaser.Scene {
     staircase.fillRect(18, 6, 12, 16); // arrow shaft
     staircase.generateTexture('staircase', 48, 48);
     staircase.destroy();
+
+    // enemy-warden: 48x48 dark red filled rectangle (elite warden guard)
+    const enemyWarden = this.make.graphics({ x: 0, y: 0 }, false);
+    enemyWarden.fillStyle(0x8b0000);
+    enemyWarden.fillRect(0, 0, 48, 48);
+    enemyWarden.generateTexture('enemy-warden', 48, 48);
+    enemyWarden.destroy();
+
+    // loot-token: 16x16 white diamond shape for companion token (tinted at spawn)
+    const lootToken = this.make.graphics({ x: 0, y: 0 }, false);
+    lootToken.fillStyle(0xffffff);
+    lootToken.fillTriangle(8, 0, 16, 8, 8, 16);
+    lootToken.fillTriangle(8, 0, 0, 8, 8, 16);
+    lootToken.generateTexture('loot-token', 16, 16);
+    lootToken.destroy();
   }
 }

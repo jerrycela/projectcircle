@@ -21,10 +21,16 @@ export interface Room {
   state: RoomState;
 }
 
+export interface HostageRoomData {
+  roomIndex: number;
+  companionId: string;
+}
+
 export interface DungeonData {
   grid: number[][];
   rooms: Room[];
   hazards: HazardData[];
+  hostageRoom: HostageRoomData | null;
 }
 
 const MAX_RETRIES = 10;
@@ -114,7 +120,7 @@ function isConnected(grid: number[][], rooms: Room[]): boolean {
   return true;
 }
 
-function tryGenerate(roomCount: number, roomSizeMin?: number, roomSizeMax?: number): Omit<DungeonData, 'hazards'> | null {
+function tryGenerate(roomCount: number, roomSizeMin?: number, roomSizeMax?: number): Omit<DungeonData, 'hazards' | 'hostageRoom'> | null {
   const width = GAME_CONFIG.MAP_WIDTH;
   const height = GAME_CONFIG.MAP_HEIGHT;
   const roomMin = roomSizeMin ?? GAME_CONFIG.ROOM_SIZE.min;
@@ -197,6 +203,18 @@ function assignAltarRoom(rooms: Room[]): void {
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
   pick.state = RoomState.ALTAR;
   console.log(`[DungeonGenerator] Altar room assigned: room ${rooms.indexOf(pick)}`);
+}
+
+function assignHostageRoom(rooms: Room[], companionId: string): HostageRoomData | null {
+  const candidates = rooms
+    .map((room, index) => ({ room, index }))
+    .filter(({ room, index }) => index > 0 && room.state !== RoomState.ALTAR);
+
+  if (candidates.length === 0) return null;
+
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  console.log(`[DungeonGenerator] Hostage room assigned: room ${pick.index} for companion ${companionId}`);
+  return { roomIndex: pick.index, companionId };
 }
 
 function generateHazards(grid: number[][], rooms: Room[]): HazardData[] {
@@ -287,6 +305,7 @@ function findPoolTile(grid: number[][], room: Room): { x: number; y: number } | 
 export interface GenerateOptions {
   roomCount?: { min: number; max: number };
   roomSize?: { min: number; max: number };
+  companionId?: string;
 }
 
 export function generate(options?: GenerateOptions): DungeonData {
@@ -301,9 +320,12 @@ export function generate(options?: GenerateOptions): DungeonData {
       if (result !== null) {
         console.log(`[DungeonGenerator] Generated dungeon with ${result.rooms.length} rooms (target: ${roomCount})`);
         assignAltarRoom(result.rooms);
+        const hostageRoom = options?.companionId
+          ? assignHostageRoom(result.rooms, options.companionId)
+          : null;
         const hazards = generateHazards(result.grid, result.rooms);
         console.log(`[DungeonGenerator] Generated ${hazards.length} hazards`);
-        return { ...result, hazards };
+        return { ...result, hazards, hostageRoom };
       }
     }
   }
@@ -317,5 +339,5 @@ export function generate(options?: GenerateOptions): DungeonData {
     state: RoomState.UNVISITED,
   };
   carveRoom(grid, fallbackRoom);
-  return { grid, rooms: [fallbackRoom], hazards: [] };
+  return { grid, rooms: [fallbackRoom], hazards: [], hostageRoom: null };
 }
