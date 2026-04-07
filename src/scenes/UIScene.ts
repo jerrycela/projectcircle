@@ -5,6 +5,7 @@ import { UpgradePanel } from '../ui/UpgradePanel';
 import { EquipmentComparePanel } from '../ui/EquipmentComparePanel';
 import { EquipmentPanel } from '../ui/EquipmentPanel';
 import { CompanionPanel } from '../ui/CompanionPanel';
+import { InitialSkillPanel } from '../ui/InitialSkillPanel';
 import { COMPANION_DEFS } from '../config';
 import type { GameScene } from './GameScene';
 import type { Altar } from '../entities/Altar';
@@ -17,6 +18,7 @@ export class UIScene extends Phaser.Scene {
   private equipmentComparePanel!: EquipmentComparePanel;
   private equipmentPanel!: EquipmentPanel;
   private companionPanel!: CompanionPanel;
+  private initialSkillPanel!: InitialSkillPanel;
   private rescueBtn?: Phaser.GameObjects.Text;
   private deathText?: Phaser.GameObjects.Text;
 
@@ -32,6 +34,7 @@ export class UIScene extends Phaser.Scene {
     this.equipmentComparePanel = new EquipmentComparePanel(this);
     this.equipmentPanel = new EquipmentPanel(this);
     this.companionPanel = new CompanionPanel(this);
+    this.initialSkillPanel = new InitialSkillPanel(this);
 
     // Rescue button (hidden by default)
     EventBus.on('show-rescue-button', () => {
@@ -81,6 +84,13 @@ export class UIScene extends Phaser.Scene {
       });
     });
 
+    EventBus.on('show-initial-skill-pick', () => {
+      const gameScene = this.scene.get('GameScene') as GameScene;
+      if (gameScene?.skillManager) {
+        this.initialSkillPanel.show(gameScene.skillManager);
+      }
+    });
+
     EventBus.on('altar-activated', (altar: Altar) => {
       const gameScene = this.scene.get('GameScene') as GameScene;
       if (gameScene?.statsManager && gameScene?.player && gameScene?.skillManager) {
@@ -100,6 +110,7 @@ export class UIScene extends Phaser.Scene {
     EventBus.on('game-scene-shutdown', () => {
       this.upgradePanel.destroy();
       this.companionPanel.destroy();
+      this.initialSkillPanel.destroy();
       if (this.rescueBtn) { this.rescueBtn.destroy(); this.rescueBtn = undefined; }
     });
 

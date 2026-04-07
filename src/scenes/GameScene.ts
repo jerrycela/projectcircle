@@ -331,6 +331,16 @@ export class GameScene extends Phaser.Scene {
 
     EventBus.emit('scene-ready');
 
+    // Show initial skill pick on fresh run (no skills yet)
+    if (this.skillManager.getSkillCount() === 0) {
+      this.gameplayLocked = true;
+      this.physics.pause();
+      // Delay slightly so UIScene has finished setting up listeners
+      this.time.delayedCall(100, () => {
+        EventBus.emit('show-initial-skill-pick');
+      });
+    }
+
     const params = new URLSearchParams(window.location.search);
     if (params.get('debug') === '1') {
       this.debugManager = new DebugManager(this);
@@ -355,6 +365,7 @@ export class GameScene extends Phaser.Scene {
     EventBus.off('equipment-pickup');
     EventBus.off('equipment-compare-done');
     EventBus.off('rescue-triggered');
+    EventBus.off('show-initial-skill-pick');
     EventBus.off('hostage-guards-defeated');
     EventBus.off('show-rescue-button');
     EventBus.off('hide-rescue-button');

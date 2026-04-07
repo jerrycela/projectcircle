@@ -113,6 +113,8 @@ interface DebugAPI {
   clearElements(): void;
   triggerReaction(type: string): void;
   listHazards(): void;
+  // Initial skill pick
+  showInitialSkillPick(): void;
   // Companion debug commands
   unlockCompanion(id: string): void;
   setAffection(id: string, value: number): void;
@@ -550,6 +552,12 @@ export class DebugManager {
         for (const t of torches) {
           console.log(`  Torch at (${t.x.toFixed(0)}, ${t.y.toFixed(0)})`);
         }
+      },
+
+      // ---- Initial skill pick
+      showInitialSkillPick: () => {
+        EventBus.emit('show-initial-skill-pick');
+        console.log('[Debug] showInitialSkillPick: triggered initial skill selection panel');
       },
 
       // ---- Companion commands
