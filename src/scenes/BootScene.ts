@@ -16,7 +16,7 @@ export class BootScene extends Phaser.Scene {
       'loot-gold', 'loot-wood', 'loot-ore', 'loot-cloth',
       'loot-health-orb', 'loot-equipment', 'loot-token',
       'altar', 'staircase',
-      'joystick-base', 'joystick-thumb', 'attack-arc',
+      'attack-arc',
     ];
     for (const key of assets) {
       this.load.image(key, `assets/${key}.png`);

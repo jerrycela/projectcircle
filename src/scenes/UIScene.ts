@@ -1,18 +1,19 @@
 import Phaser from 'phaser';
-import { Joystick } from '../ui/Joystick';
+import { DPad } from '../ui/DPad';
 import { HUD } from '../ui/HUD';
 import { UpgradePanel } from '../ui/UpgradePanel';
 import { EquipmentComparePanel } from '../ui/EquipmentComparePanel';
 import { EquipmentPanel } from '../ui/EquipmentPanel';
 import { CompanionPanel } from '../ui/CompanionPanel';
 import { InitialSkillPanel } from '../ui/InitialSkillPanel';
+import { GOTHIC_FONTS } from '../ui/GothicTheme';
 import { COMPANION_DEFS } from '../config';
 import type { GameScene } from './GameScene';
 import type { Altar } from '../entities/Altar';
 import EventBus from '../systems/EventBus';
 
 export class UIScene extends Phaser.Scene {
-  private joystick!: Joystick;
+  private dpad!: DPad;
   private hud!: HUD;
   private upgradePanel!: UpgradePanel;
   private equipmentComparePanel!: EquipmentComparePanel;
@@ -21,6 +22,7 @@ export class UIScene extends Phaser.Scene {
   private initialSkillPanel!: InitialSkillPanel;
   private rescueBtn?: Phaser.GameObjects.Text;
   private deathText?: Phaser.GameObjects.Text;
+  private deathVignette?: Phaser.GameObjects.Graphics;
 
   constructor() {
     super('UIScene');
@@ -28,7 +30,7 @@ export class UIScene extends Phaser.Scene {
 
   create(): void {
     console.log('UIScene started');
-    this.joystick = new Joystick(this);
+    this.dpad = new DPad(this);
     this.hud = new HUD(this);
     this.upgradePanel = new UpgradePanel(this);
     this.equipmentComparePanel = new EquipmentComparePanel(this);
@@ -36,16 +38,15 @@ export class UIScene extends Phaser.Scene {
     this.companionPanel = new CompanionPanel(this);
     this.initialSkillPanel = new InitialSkillPanel(this);
 
-    // Rescue button (hidden by default)
+    // Rescue button (hidden by default) — gothic styled
     EventBus.on('show-rescue-button', () => {
       if (this.rescueBtn) return;
       const cx = this.cameras.main.width - 80;
       const cy = this.cameras.main.height - 60;
       this.rescueBtn = this.add.text(cx, cy, '[RESCUE]', {
+        ...GOTHIC_FONTS.GOLD,
         fontSize: '20px',
-        color: '#ffcc00',
-        fontFamily: 'monospace',
-        backgroundColor: '#333333',
+        backgroundColor: '#1e1a15',
         padding: { x: 12, y: 8 },
       });
       this.rescueBtn.setOrigin(0.5, 0.5);
@@ -69,9 +70,8 @@ export class UIScene extends Phaser.Scene {
       if (!def) return;
       const notifCx = this.cameras.main.width / 2;
       const notif = this.add.text(notifCx, 100, `${def.tokenName} +${data.amount}`, {
-        fontSize: '14px',
+        ...GOTHIC_FONTS.BODY,
         color: `#${def.themeColor.toString(16).padStart(6, '0')}`,
-        fontFamily: 'monospace',
       });
       notif.setOrigin(0.5, 0.5);
       notif.setDepth(100);
@@ -108,6 +108,8 @@ export class UIScene extends Phaser.Scene {
     });
 
     EventBus.on('game-scene-shutdown', () => {
+      this.hud.destroy();
+      this.dpad.destroy();
       this.upgradePanel.destroy();
       this.companionPanel.destroy();
       this.initialSkillPanel.destroy();
@@ -120,22 +122,39 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
-  update(): void {
-    this.hud.update();
+  update(time: number, delta: number): void {
+    this.hud.update(time, delta);
   }
 
+  // P2 修正: death vignette 用多層同心環遞減 alpha
   private showDeathText(floor: number): void {
     if (this.deathText) return;
 
     const cx = this.cameras.main.width / 2;
     const cy = this.cameras.main.height / 2;
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
 
-    this.deathText = this.add.text(cx, cy, `You Died - Floor ${floor}`, {
-      fontSize: '24px',
-      color: '#ffffff',
-      fontFamily: 'monospace',
-      stroke: '#000000',
-      strokeThickness: 4,
+    // Death vignette — concentric rings with decreasing alpha
+    const vignetteGfx = this.add.graphics();
+    vignetteGfx.setDepth(199);
+    const maxR = Math.max(w, h) * 0.7;
+    const ringCount = 8;
+    for (let i = ringCount; i >= 0; i--) {
+      const t = i / ringCount;
+      const r = maxR * t;
+      const a = (1 - t) * 0.6; // outer = dark, inner = transparent
+      vignetteGfx.fillStyle(0x1a0000, a);
+      vignetteGfx.fillCircle(cx, cy, r);
+    }
+    // Dark overlay on edges
+    vignetteGfx.fillStyle(0x000000, 0.4);
+    vignetteGfx.fillRect(0, 0, w, h);
+    this.deathVignette = vignetteGfx;
+
+    this.deathText = this.add.text(cx, cy, `You Died\nFloor ${floor}`, {
+      ...GOTHIC_FONTS.DEATH,
+      align: 'center',
     });
     this.deathText.setOrigin(0.5, 0.5);
     this.deathText.setDepth(200);
@@ -145,6 +164,10 @@ export class UIScene extends Phaser.Scene {
     if (this.deathText) {
       this.deathText.destroy();
       this.deathText = undefined;
+    }
+    if (this.deathVignette) {
+      this.deathVignette.destroy();
+      this.deathVignette = undefined;
     }
   }
 }
