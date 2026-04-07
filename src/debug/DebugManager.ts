@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { GameScene } from '../scenes/GameScene';
 import { RoomState } from '../systems/DungeonGenerator';
-import { GAME_CONFIG, ENEMY_DEFS } from '../config';
+import { GAME_CONFIG, ENEMY_DEFS, Element } from '../config';
 import { Enemy } from '../entities/Enemy';
 import { LootType } from '../entities/Loot';
 import type { LootType as LootTypeT } from '../entities/Loot';
@@ -52,6 +52,12 @@ interface GameState {
     fps: number;
     bodies: number;
   };
+  elemental: {
+    playerElement: string | null;
+    playerElementRemainingMs: number | null;
+    enemyElements: Record<string, number>;
+    hazards: { waterPools: number; torches: number };
+  };
 }
 
 interface DebugAPI {
@@ -93,6 +99,12 @@ interface DebugAPI {
   resetSkillOffered(): void;
   openShop(): void;
   setSkillLevel(type: string, level: number): void;
+  // Elemental debug commands
+  setPlayerElement(element: string): void;
+  setEnemyElement(element: string): void;
+  clearElements(): void;
+  triggerReaction(type: string): void;
+  listHazards(): void;
 }
 
 declare global {
@@ -320,7 +332,7 @@ export class DebugManager {
         const sm = this.scene.skillManager;
         if (!sm) { console.log('[Debug] listSkills: skillManager not ready'); return; }
         console.log('[Debug] listSkills:');
-        for (let i = 0; i < 2; i++) {
+        for (let i = 0; i < GAME_CONFIG.SKILL_SLOT_COUNT; i++) {
           const type = sm.getSlotType(i);
           const state = sm.getSlotState(i);
           const cd = sm.getSlotCooldownRemaining(i);
@@ -445,6 +457,87 @@ export class DebugManager {
         EventBus.emit('skill-state-changed');
         console.log(`[Debug] setSkillLevel: ${type} -> Lv.${level}`);
       },
+
+      // ---- Elemental commands
+      setPlayerElement: (element: string) => {
+        const player = this.scene.player;
+        if (!player) { console.log('[Debug] setPlayerElement: player not ready'); return; }
+        const upper = element.toUpperCase();
+        const validElements = ['WATER', 'FIRE', 'THUNDER', 'WIND'];
+        if (!validElements.includes(upper)) {
+          console.log(`[Debug] setPlayerElement: unknown "${element}". Valid: ${validElements.join(', ')}`);
+          return;
+        }
+        player.elementalState.apply(upper as import('../config').Element);
+        console.log(`[Debug] setPlayerElement: ${upper}`);
+      },
+
+      setEnemyElement: (element: string) => {
+        const enemies = this.scene.enemyGroup?.getChildren() as Enemy[] | undefined;
+        if (!enemies) { console.log('[Debug] setEnemyElement: no enemies'); return; }
+        const upper = element.toUpperCase();
+        const validElements = ['WATER', 'FIRE', 'THUNDER', 'WIND'];
+        if (!validElements.includes(upper)) {
+          console.log(`[Debug] setEnemyElement: unknown "${element}". Valid: ${validElements.join(', ')}`);
+          return;
+        }
+        let count = 0;
+        for (const enemy of enemies) {
+          if (enemy.active) {
+            enemy.elementalState.apply(upper as import('../config').Element);
+            count++;
+          }
+        }
+        console.log(`[Debug] setEnemyElement: applied ${upper} to ${count} enemies`);
+      },
+
+      clearElements: () => {
+        const player = this.scene.player;
+        if (player) player.elementalState.clear();
+        const enemies = this.scene.enemyGroup?.getChildren() as Enemy[] | undefined;
+        if (enemies) {
+          for (const enemy of enemies) {
+            if (enemy.active) enemy.elementalState.clear();
+          }
+        }
+        console.log('[Debug] clearElements: all elements cleared');
+      },
+
+      triggerReaction: (type: string) => {
+        const player = this.scene.player;
+        if (!player) { console.log('[Debug] triggerReaction: player not ready'); return; }
+        const enemies = this.scene.enemyGroup?.getChildren() as Enemy[] | undefined;
+        if (!enemies) { console.log('[Debug] triggerReaction: no enemies'); return; }
+        const nearest = enemies.find(e => e.active);
+        if (!nearest) { console.log('[Debug] triggerReaction: no active enemies'); return; }
+
+        switch (type.toLowerCase()) {
+          case 'electro':
+          case 'electro_storm':
+            nearest.elementalState.apply(Element.WATER);
+            console.log('[Debug] triggerReaction: enemy=WATER. Use thunderstorm to trigger Electro Storm.');
+            break;
+          case 'flame':
+          case 'flame_burst':
+            nearest.elementalState.apply(Element.FIRE);
+            console.log('[Debug] triggerReaction: enemy=FIRE. Use tornado to trigger Flame Burst.');
+            break;
+          default:
+            console.log(`[Debug] triggerReaction: unknown "${type}". Use: electro_storm, flame_burst`);
+        }
+      },
+
+      listHazards: () => {
+        const pools = this.scene.waterPools ?? [];
+        const torches = this.scene.torches ?? [];
+        console.log(`[Debug] listHazards: ${pools.length} water pools, ${torches.length} torches`);
+        for (const p of pools) {
+          console.log(`  Water Pool at (${p.x.toFixed(0)}, ${p.y.toFixed(0)})`);
+        }
+        for (const t of torches) {
+          console.log(`  Torch at (${t.x.toFixed(0)}, ${t.y.toFixed(0)})`);
+        }
+      },
     };
   }
 
@@ -456,7 +549,7 @@ export class DebugManager {
     const skillStates: Record<string, string> = {};
     const skillCooldowns: Record<string, number> = {};
     if (sm) {
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < GAME_CONFIG.SKILL_SLOT_COUNT; i++) {
         const type = sm.getSlotType(i);
         const key = type ?? `slot${i}`;
         skillStates[key] = sm.getSlotState(i);
@@ -526,6 +619,28 @@ export class DebugManager {
         fps: this.scene.game.loop.actualFps,
         bodies: this.scene.physics.world.bodies.size + this.scene.physics.world.staticBodies.size,
       },
+      elemental: (() => {
+        const playerEl = this.scene.player?.elementalState;
+        const enemies = this.scene.enemyGroup?.getChildren() as Enemy[] | undefined;
+        const enemyElements: Record<string, number> = {};
+        if (enemies) {
+          for (const e of enemies) {
+            if (e.active && e.elementalState.element) {
+              const el = e.elementalState.element;
+              enemyElements[el] = (enemyElements[el] ?? 0) + 1;
+            }
+          }
+        }
+        return {
+          playerElement: playerEl?.element ?? null,
+          playerElementRemainingMs: playerEl?.remainingMs ?? null,
+          enemyElements,
+          hazards: {
+            waterPools: this.scene.waterPools?.length ?? 0,
+            torches: this.scene.torches?.length ?? 0,
+          },
+        };
+      })(),
     };
   }
 
