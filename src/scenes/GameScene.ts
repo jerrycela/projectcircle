@@ -24,6 +24,7 @@ import { CompanionManager } from '../systems/CompanionManager';
 import { Hostage, HostageState } from '../entities/Hostage';
 import type { HostageRoomData } from '../systems/DungeonGenerator';
 import type { EquipmentItem, EquipmentSlot } from '../config';
+import { FogOfWar } from '../effects/FogOfWar';
 
 export interface RunState {
   statsManagerState: { bonuses: StatBlock; levels: Record<string, number>; equipmentBonuses?: Partial<StatBlock> };
@@ -66,6 +67,7 @@ export class GameScene extends Phaser.Scene {
   public waterPools: WaterPool[] = [];
   public torches: Torch[] = [];
   private runState?: RunState;
+  private fogOfWar?: FogOfWar;
 
   // Input state
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -184,7 +186,8 @@ export class GameScene extends Phaser.Scene {
     // Enemy vs walls collider
     this.physics.add.collider(this.enemyGroup, this.wallGroup);
 
-    // Camera follow with lerp
+    // Camera follow with lerp + zoom for mobile readability
+    this.cameras.main.setZoom(1.6);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
 
     // Keyboard input
@@ -298,8 +301,26 @@ export class GameScene extends Phaser.Scene {
       EventBus.emit('gameplay-lock', false);
     });
 
+    // Animator event wiring (PlayerAnimator is a pure puppet — driven from here)
+    EventBus.on('player-hit', () => {
+      this.player.animator.playHit();
+    });
+
+    EventBus.on('player-attack-swing', (data: { dirX: number; cooldownMs: number }) => {
+      this.player.animator.playAttack(data.dirX, data.cooldownMs);
+    });
+
+    EventBus.on('player-heal-flash', () => {
+      this.player.animator.playHealFlash();
+    });
+
+    EventBus.on('player-skill-cast', () => {
+      this.player.animator.playCast();
+    });
+
     // Player death handler
     EventBus.on('player-died', () => {
+      this.player.animator.playDead();
       this.combatSystem.onPlayerDied();
       this.triggerDeath();
     });
@@ -329,6 +350,53 @@ export class GameScene extends Phaser.Scene {
       this.physics.pause();
     }
 
+    // --- Atmosphere: Fog of War ---
+    this.fogOfWar = new FogOfWar(this, mapPixelWidth, mapPixelHeight);
+
+    // --- Atmosphere: Vignette (camera-fixed dark corners) ---
+    const vigW = GAME_CONFIG.GAME_WIDTH;
+    const vigH = GAME_CONFIG.GAME_HEIGHT;
+    const vigCanvas = this.textures.createCanvas('vignette-tex', vigW, vigH)!;
+    const vigCtx = vigCanvas.getContext();
+    const grad = vigCtx.createRadialGradient(vigW / 2, vigH / 2, vigH * 0.25, vigW / 2, vigH / 2, vigH * 0.65);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+    vigCtx.fillStyle = grad;
+    vigCtx.fillRect(0, 0, vigW, vigH);
+    vigCanvas.refresh();
+    const vigImg = this.add.image(vigW / 2, vigH / 2, 'vignette-tex');
+    vigImg.setScrollFactor(0);
+    vigImg.setDepth(91);
+
+    // --- Atmosphere: Static noise overlay (CRT grain) ---
+    const noiseSize = 128;
+    const noiseCanvas = this.textures.createCanvas('noise-tex', noiseSize, noiseSize)!;
+    const noiseCtx = noiseCanvas.getContext();
+    const noiseData = noiseCtx.createImageData(noiseSize, noiseSize);
+    for (let i = 0; i < noiseData.data.length; i += 4) {
+      const v = Math.random() > 0.5 ? 255 : 0;
+      noiseData.data[i] = v;
+      noiseData.data[i + 1] = v;
+      noiseData.data[i + 2] = v;
+      noiseData.data[i + 3] = 8; // ~0.03 alpha
+    }
+    noiseCtx.putImageData(noiseData, 0, 0);
+    noiseCanvas.refresh();
+    const noiseTile = this.add.tileSprite(vigW / 2, vigH / 2, vigW, vigH, 'noise-tex');
+    noiseTile.setScrollFactor(0);
+    noiseTile.setDepth(92);
+
+    // --- Fog update in postupdate (after physics) ---
+    this.events.on('postupdate', () => {
+      if (this.fogOfWar && this.player?.active) {
+        this.fogOfWar.update(
+          this.player.x, this.player.y,
+          this.torches,
+          this.game.loop.delta,
+        );
+      }
+    });
+
     EventBus.emit('scene-ready');
 
     // Show initial skill pick on fresh run (no skills yet)
@@ -349,6 +417,12 @@ export class GameScene extends Phaser.Scene {
 
   private onShutdown(): void {
     EventBus.emit('game-scene-shutdown');
+    this.fogOfWar?.destroy();
+    this.fogOfWar = undefined;
+    this.events.off('postupdate');
+    // Remove dynamic textures to prevent WebGL leak on scene restart
+    if (this.textures.exists('vignette-tex')) this.textures.remove('vignette-tex');
+    if (this.textures.exists('noise-tex')) this.textures.remove('noise-tex');
     this.combatSystem?.destroy();
     this.lootSystem?.destroy();
     // Destroy all projectiles to prevent orphaned physics bodies
@@ -357,6 +431,10 @@ export class GameScene extends Phaser.Scene {
     }
     EventBus.off('joystick-move');
     EventBus.off('joystick-stop');
+    EventBus.off('player-hit');
+    EventBus.off('player-attack-swing');
+    EventBus.off('player-heal-flash');
+    EventBus.off('player-skill-cast');
     EventBus.off('player-died');
     EventBus.off('gameplay-lock');
     EventBus.off('altar-session-closed');
@@ -405,6 +483,7 @@ export class GameScene extends Phaser.Scene {
     this.detectPlayerRoom();
     this.updateEnemyAI();
     this.checkRoomClearing();
+    this.player.animator.update(delta, this.player.isMoving);
     this.skillManager.update(delta);
     this.combatSystem.update(time, delta);
     this.lootSystem.update();

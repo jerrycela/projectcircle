@@ -3,6 +3,7 @@ import { GAME_CONFIG } from '../config';
 import EventBus from '../systems/EventBus';
 import type { StatsManager } from '../systems/StatsManager';
 import { ElementalState } from '../systems/ElementalState';
+import { PlayerAnimator } from './PlayerAnimator';
 
 export class Player extends Phaser.GameObjects.Container {
   public hp: number;
@@ -20,8 +21,10 @@ export class Player extends Phaser.GameObjects.Container {
 
   private flickerEvent?: Phaser.Time.TimerEvent;
 
-  private baseSprite: Phaser.GameObjects.Image;
-  private weaponSprite: Phaser.GameObjects.Image;
+  public readonly baseSprite: Phaser.GameObjects.Image;
+  public readonly weaponSprite: Phaser.GameObjects.Image;
+  public readonly indicator: Phaser.GameObjects.Graphics;
+  public animator!: PlayerAnimator;
 
   constructor(scene: Phaser.Scene, x: number, y: number, statsManager: StatsManager) {
     super(scene, x, y);
@@ -33,6 +36,13 @@ export class Player extends Phaser.GameObjects.Container {
     this.maxMp = GAME_CONFIG.PLAYER_MP;
     this.speed = statsManager.getStat('moveSpeed');
 
+    // Ground indicator — subtle glow beneath player for visibility
+    this.indicator = scene.add.graphics();
+    this.indicator.fillStyle(0xffcc44, 0.15);
+    this.indicator.fillCircle(0, 4, 24);
+    this.indicator.fillStyle(0xffcc44, 0.3);
+    this.indicator.fillCircle(0, 4, 12);
+
     // Visual children — no physics on these
     this.baseSprite = scene.add.image(0, 0, 'player-body');
     this.baseSprite.setOrigin(0.5, 0.5);
@@ -40,7 +50,7 @@ export class Player extends Phaser.GameObjects.Container {
     this.weaponSprite = scene.add.image(15, 0, 'player-weapon');
     this.weaponSprite.setOrigin(0.5, 0.5);
 
-    this.add([this.baseSprite, this.weaponSprite]);
+    this.add([this.indicator, this.baseSprite, this.weaponSprite]);
 
     // Add container to scene and enable physics
     scene.add.existing(this);
@@ -50,6 +60,9 @@ export class Player extends Phaser.GameObjects.Container {
     body.setSize(32, 32);
     body.setOffset(-16, -16);
     body.setCollideWorldBounds(true);
+
+    // Animator — procedural puppet animations
+    this.animator = new PlayerAnimator(scene, this, this.baseSprite, this.weaponSprite, this.indicator);
 
     // Listen for weapon type changes
     EventBus.on('weapon-changed', (subtype: string) => {
@@ -119,6 +132,7 @@ export class Player extends Phaser.GameObjects.Container {
   heal(amount: number): void {
     this.hp = Math.min(this.hp + amount, this.maxHp);
     EventBus.emit('player-hp-changed', this.hp, this.maxHp);
+    EventBus.emit('player-heal-flash');
   }
 
   addGold(amount: number): void {
@@ -164,6 +178,11 @@ export class Player extends Phaser.GameObjects.Container {
       // Immediately clear invincibility
       this.setAlpha(1.0);
     }
+  }
+
+  override destroy(fromScene?: boolean): void {
+    this.animator?.destroy();
+    super.destroy(fromScene);
   }
 
   updateElementVisual(): void {

@@ -56,6 +56,11 @@ export class CombatSystem {
     if (!enemy) return;
 
     this.lastAttackTime = time;
+
+    // Emit attack swing event for PlayerAnimator
+    const dx = enemy.x - player.x;
+    EventBus.emit('player-attack-swing', { dirX: dx, cooldownMs: cooldown });
+
     this.executePlayerAttack(player, enemy, mods.damageMult);
   }
 

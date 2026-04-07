@@ -183,6 +183,7 @@ export class SkillManager {
 
     // Execute skill effect
     this.executeSkill(slot.type, def);
+    EventBus.emit('player-skill-cast');
 
     // After cast duration -> COOLDOWN
     this.scene.time.delayedCall(def.castDurationMs, () => {

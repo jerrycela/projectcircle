@@ -55,6 +55,7 @@ export class Enemy extends Phaser.GameObjects.Image {
   declare body: Phaser.Physics.Arcade.Body;
 
   private knockbackTimer: number = 0;
+  private shadow: Phaser.GameObjects.Graphics;
 
   constructor(
     scene: Phaser.Scene,
@@ -77,6 +78,13 @@ export class Enemy extends Phaser.GameObjects.Image {
     this.attackRange = config.attackRange;
     this.roomIndex = roomIndex;
 
+    // Foot shadow
+    this.shadow = scene.add.graphics();
+    this.shadow.fillStyle(0x000000, 0.4);
+    this.shadow.fillEllipse(0, 0, config.size, config.size / 3);
+    this.shadow.setPosition(x, y + config.size * 0.35);
+    this.shadow.setDepth(-1);
+
     scene.add.existing(this);
     scene.physics.world.enable(this);
 
@@ -97,6 +105,10 @@ export class Enemy extends Phaser.GameObjects.Image {
   }
 
   updateAI(player: Player, rooms: Room[]): void {
+    // Sync shadow position
+    this.shadow.setPosition(this.x, this.y + this.config.size * 0.35);
+    this.shadow.setVisible(this.visible);
+
     // CC Stun layer — independent of AI state
     if (this.ccStunRemainingMs > 0) {
       this.ccStunRemainingMs -= this.scene.game.loop.delta;
@@ -530,6 +542,8 @@ export class Enemy extends Phaser.GameObjects.Image {
     if (!this.isSummon) {
       EventBus.emit('enemy-killed', this);
     }
+
+    this.shadow.destroy();
 
     this.setActive(false);
     this.setVisible(false);
