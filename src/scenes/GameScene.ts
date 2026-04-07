@@ -618,6 +618,8 @@ export class GameScene extends Phaser.Scene {
           WATER: 0x4488ff, FIRE: 0xff6600, THUNDER: 0xffff44, WIND: 0x88ffcc,
         };
         enemy.setTint(tints[enemy.elementalState.element] ?? 0xffffff);
+      } else {
+        enemy.clearTint();
       }
     }
   }

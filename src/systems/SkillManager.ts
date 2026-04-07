@@ -587,6 +587,7 @@ export class SkillManager {
 
     const hitThisTick = new Set<Enemy>();
 
+    let hadFlameAura = false;
     const updateListener = (_time: number, delta: number) => {
       if (destroyed) return;
 
@@ -601,6 +602,7 @@ export class SkillManager {
       }
 
       if (hasFlameAura) {
+        hadFlameAura = true;
         flameAuraTimer -= delta;
         if (flameAuraTimer <= 0) {
           hasFlameAura = false;
@@ -637,7 +639,7 @@ export class SkillManager {
             attackElement: hasFlameAura ? Element.FIRE : Element.WIND,
             hitPosition: { x: enemy.x, y: enemy.y },
             alreadyHitIds: new Set(),
-            isSecondaryProc: hasFlameAura,
+            isSecondaryProc: hasFlameAura || hadFlameAura,
           };
 
           const result = ReactionResolver.resolve(enemy, hitContext);
