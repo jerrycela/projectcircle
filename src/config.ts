@@ -113,6 +113,7 @@ export interface EnemyConfig {
   attack: number;
   attackCooldown: number;
   attackRange: number;
+  element?: Element;
   aiType: 'chase' | 'charge' | 'shield' | 'summon';
   chargeConfig?: {
     chargeSpeed: number;
@@ -139,6 +140,7 @@ export interface EnemyConfig {
   maxPerRoom?: number;
   unlockFloor: number;
   spawnWeight: number;
+  isElite?: boolean;
 }
 
 export const ENEMY_DEFS: Record<string, EnemyConfig> = {
@@ -151,6 +153,7 @@ export const ENEMY_DEFS: Record<string, EnemyConfig> = {
     attack: 10,
     attackCooldown: 1500,
     attackRange: 30,
+    element: Element.WIND,
     aiType: 'chase',
     unlockFloor: 1,
     spawnWeight: 10,
@@ -164,6 +167,7 @@ export const ENEMY_DEFS: Record<string, EnemyConfig> = {
     attack: 15,
     attackCooldown: 1200,
     attackRange: 35,
+    element: Element.FIRE,
     aiType: 'chase',
     unlockFloor: 2,
     spawnWeight: 8,
@@ -177,6 +181,7 @@ export const ENEMY_DEFS: Record<string, EnemyConfig> = {
     attack: 12,
     attackCooldown: 0,
     attackRange: 30,
+    element: Element.WIND,
     aiType: 'charge',
     chargeConfig: {
       chargeSpeed: 280,
@@ -210,6 +215,7 @@ export const ENEMY_DEFS: Record<string, EnemyConfig> = {
     attack: 12,
     attackCooldown: 1800,
     attackRange: 30,
+    element: Element.THUNDER,
     aiType: 'shield',
     shieldConfig: {
       shieldArc: 120,
@@ -229,6 +235,7 @@ export const ENEMY_DEFS: Record<string, EnemyConfig> = {
     attack: 8,
     attackCooldown: 0,
     attackRange: 0,
+    element: Element.WATER,
     aiType: 'summon',
     summonConfig: {
       summonType: 'skeleton-swordsman',
@@ -243,6 +250,20 @@ export const ENEMY_DEFS: Record<string, EnemyConfig> = {
     maxPerRoom: 1,
     unlockFloor: 5,
     spawnWeight: 3,
+  },
+  warden: {
+    type: 'warden',
+    textureKey: 'enemy-warden',
+    size: 48,
+    hp: 100,
+    speed: 80,
+    attack: 15,
+    attackCooldown: 1200,
+    attackRange: 40,
+    aiType: 'chase',
+    unlockFloor: 1,
+    spawnWeight: 0,
+    isElite: true,
   },
 };
 
@@ -481,3 +502,55 @@ export const EQUIPMENT_SLOT_LABELS: Record<EquipmentSlot, string> = {
   helmet: 'Helmet',
   accessory: 'Accessory',
 };
+
+// ---- Companion System ----
+
+export interface CompanionDef {
+  id: string;
+  name: string;
+  element: Element | null;
+  themeColor: number;
+  tokenName: string;
+}
+
+export const COMPANION_DEFS: CompanionDef[] = [
+  { id: 'ember', name: 'Ember', element: Element.FIRE,    themeColor: 0xFF6B35, tokenName: 'Flameheart Stone' },
+  { id: 'coral', name: 'Coral', element: Element.WATER,   themeColor: 0x4ECDC4, tokenName: 'Tidal Pearl' },
+  { id: 'volt',  name: 'Volt',  element: Element.THUNDER, themeColor: 0xFFE66D, tokenName: 'Thundershard' },
+  { id: 'flora', name: 'Flora', element: Element.WIND,    themeColor: 0x95E06C, tokenName: 'Verdant Seed' },
+  { id: 'luna',  name: 'Luna',  element: null,            themeColor: 0xB388FF, tokenName: 'Moonshade Crystal' },
+];
+
+export const COMPANION_CONFIG = {
+  RESCUE_AFFECTION_FIRST: 30,
+  RESCUE_AFFECTION_REPEAT: 15,
+  TOKEN_AFFECTION: 25,
+  GOLD_AFFECTION_PER_100: 5,
+  MATERIAL_AFFECTION: 5,
+  AFFECTION_CAP: 600,
+  STAGE_THRESHOLDS: [100, 300, 600] as const,
+  STAGE_FLOOR_GATES: [0, 3, 5] as const,
+  INTERACTION_RANGE: 64,
+  RESCUE_DURATION_MS: 1200,
+  WARDEN_HP_MULT: 2,
+  WARDEN_ATK_MULT: 1.5,
+} as const;
+
+export interface TokenDropCondition {
+  companionId: string;
+  check: 'element' | 'any' | 'elite' | 'floor-any' | 'floor-elite';
+  element?: Element;
+  minFloor?: number;
+  dropRate: number;
+}
+
+export const TOKEN_DROP_TABLE: TokenDropCondition[] = [
+  { companionId: 'ember', check: 'element', element: Element.FIRE, dropRate: 0.15 },
+  { companionId: 'coral', check: 'element', element: Element.WATER, dropRate: 0.15 },
+  { companionId: 'volt', check: 'element', element: Element.THUNDER, dropRate: 0.15 },
+  { companionId: 'volt', check: 'elite', dropRate: 0.10 },
+  { companionId: 'flora', check: 'element', element: Element.WIND, dropRate: 0.15 },
+  { companionId: 'flora', check: 'any', dropRate: 0.03 },
+  { companionId: 'luna', check: 'floor-any', minFloor: 8, dropRate: 0.05 },
+  { companionId: 'luna', check: 'floor-elite', minFloor: 8, dropRate: 0.15 },
+];
