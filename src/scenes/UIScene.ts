@@ -44,6 +44,10 @@ export class UIScene extends Phaser.Scene {
       this.showDeathText(floor);
     });
 
+    EventBus.on('game-scene-shutdown', () => {
+      this.upgradePanel.destroy();
+    });
+
     EventBus.on('scene-ready', () => {
       this.destroyDeathText();
     });

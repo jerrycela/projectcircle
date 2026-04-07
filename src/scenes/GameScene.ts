@@ -289,6 +289,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onShutdown(): void {
+    EventBus.emit('game-scene-shutdown');
     this.combatSystem?.destroy();
     this.lootSystem?.destroy();
     // Destroy all projectiles to prevent orphaned physics bodies
