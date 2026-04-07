@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { SKILL_DEFS } from '../config';
+import { SKILL_DEFS, GAME_CONFIG } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import { SkillButton } from './SkillButton';
 import EventBus from '../systems/EventBus';
@@ -46,6 +46,7 @@ export class HUD {
   // Skill buttons
   private skillButton0: SkillButton;
   private skillButton1: SkillButton;
+  private skillButton2: SkillButton;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -102,8 +103,9 @@ export class HUD {
     this.materialsText.setDepth(11);
 
     // Skill buttons — right side of screen
-    this.skillButton0 = new SkillButton(scene, 390, 620, 0);
-    this.skillButton1 = new SkillButton(scene, 390, 720, 1);
+    this.skillButton0 = new SkillButton(scene, 390, 520, 0);
+    this.skillButton1 = new SkillButton(scene, 390, 620, 1);
+    this.skillButton2 = new SkillButton(scene, 390, 720, 2);
 
     // Equipment button — top right, below materials
     this.equipBtn = scene.add.text(
@@ -147,19 +149,15 @@ export class HUD {
     // Update skill buttons
     if (gameScene.skillManager) {
       const sm = gameScene.skillManager;
-      for (let i = 0; i < 2; i++) {
+      const buttons = [this.skillButton0, this.skillButton1, this.skillButton2];
+      for (let i = 0; i < GAME_CONFIG.SKILL_SLOT_COUNT; i++) {
         const type = sm.getSlotType(i);
         const state = sm.getSlotState(i);
         const cooldownRatio = sm.getSlotCooldownRatio(i);
         const mpEnough = type
           ? (SKILL_DEFS[type] ? p.mp >= SKILL_DEFS[type].mpCost : true)
           : true;
-
-        if (i === 0) {
-          this.skillButton0.update(type, state, cooldownRatio, mpEnough);
-        } else {
-          this.skillButton1.update(type, state, cooldownRatio, mpEnough);
-        }
+        buttons[i].update(type, state, cooldownRatio, mpEnough);
       }
     }
   }
