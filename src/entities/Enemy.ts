@@ -102,6 +102,25 @@ export class Enemy extends Phaser.GameObjects.Image {
       this.ccStunRemainingMs -= this.scene.game.loop.delta;
       const body = this.body as Phaser.Physics.Arcade.Body;
       body.setVelocity(0, 0);
+
+      // Electric sparks while stunned
+      if (Math.random() < 0.15) {
+        const spark = this.scene.add.graphics();
+        spark.fillStyle(0xaaddff, 0.8);
+        spark.fillCircle(0, 0, 2);
+        spark.setPosition(
+          this.x + Phaser.Math.Between(-16, 16),
+          this.y + Phaser.Math.Between(-16, 16),
+        );
+        spark.setDepth(86);
+        this.scene.tweens.add({
+          targets: spark,
+          alpha: 0,
+          duration: 150,
+          onComplete: () => spark.destroy(),
+        });
+      }
+
       if (this.ccStunRemainingMs <= 0) {
         this.ccStunRemainingMs = 0;
         if (this.preCCState !== null) {
