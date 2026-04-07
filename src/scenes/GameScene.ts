@@ -3,8 +3,10 @@ import { DebugManager } from '../debug/DebugManager';
 import { generate } from '../systems/DungeonGenerator';
 import { RoomState } from '../systems/DungeonGenerator';
 import type { Room } from '../systems/DungeonGenerator';
-import { GAME_CONFIG } from '../config';
+import { GAME_CONFIG, Element, ELEMENTAL_CONFIG } from '../config';
 import type { EnemyConfig } from '../config';
+import { WaterPool } from '../entities/WaterPool';
+import { Torch } from '../entities/Torch';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import EventBus from '../systems/EventBus';
@@ -53,6 +55,8 @@ export class GameScene extends Phaser.Scene {
   public altar?: Altar;
   public floorManager!: FloorManager;
   private staircase?: Staircase;
+  public waterPools: WaterPool[] = [];
+  public torches: Torch[] = [];
   private runState?: RunState;
 
   // Input state
@@ -92,7 +96,7 @@ export class GameScene extends Phaser.Scene {
 
     // Generate dungeon with floor-scaled config
     const floorConfig = this.floorManager.getFloorConfig();
-    const { grid, rooms } = generate({
+    const { grid, rooms, hazards } = generate({
       roomCount: floorConfig.roomCount,
       roomSize: floorConfig.roomSize,
     });
@@ -208,6 +212,17 @@ export class GameScene extends Phaser.Scene {
       this.staircase = new Staircase(this, sx, sy, this.player);
     }
 
+    // Spawn hazards
+    this.waterPools = [];
+    this.torches = [];
+    for (const h of hazards) {
+      if (h.type === 'water-pool') {
+        this.waterPools.push(new WaterPool(this, h.tileX, h.tileY));
+      } else if (h.type === 'torch') {
+        this.torches.push(new Torch(this, h.tileX, h.tileY));
+      }
+    }
+
     // Loot group and system
     this.lootGroup = this.add.group();
     this.lootSystem = new LootSystem(this, this.player, this.lootGroup, this.equipmentManager);
@@ -305,6 +320,8 @@ export class GameScene extends Phaser.Scene {
     EventBus.off('skill-cast-request');
     EventBus.off('equipment-pickup');
     EventBus.off('equipment-compare-done');
+    this.waterPools = [];
+    this.torches = [];
   }
 
   update(time: number, delta: number): void {
@@ -338,6 +355,7 @@ export class GameScene extends Phaser.Scene {
     this.skillManager.update(delta);
     this.combatSystem.update(time, delta);
     this.lootSystem.update();
+    this.updateHazardElements(delta);
     this.altar?.update(time, delta);
     this.staircase?.update();
     this.debugManager?.update();
@@ -499,6 +517,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   triggerFloorTransition(): void {
+    this.player.elementalState.clear();
     this.gameplayLocked = true;
     this.physics.pause();
     EventBus.emit('gameplay-lock', true);
@@ -514,6 +533,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   triggerDeath(): void {
+    this.player.elementalState.clear();
     this.gameplayLocked = true;
     this.physics.pause();
     EventBus.emit('gameplay-lock', true);
@@ -548,6 +568,58 @@ export class GameScene extends Phaser.Scene {
       equipmentNextId: equipState.nextId,
     };
     return { ...base, ...overrides };
+  }
+
+  private updateHazardElements(delta: number): void {
+    // Player element countdown (paused when gameplayLocked — guard at top of update())
+    this.player.elementalState.update(delta);
+    this.player.updateElementVisual();
+
+    // Closest-wins hazard rule
+    let closestDist = Infinity;
+    let closestElement: Element | null = null;
+
+    for (const pool of this.waterPools) {
+      const dx = this.player.x - pool.x;
+      const dy = this.player.y - pool.y;
+      const poolHalf = GAME_CONFIG.TILE_SIZE; // half of 2-tile pool
+      if (Math.abs(dx) <= poolHalf && Math.abs(dy) <= poolHalf) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestElement = Element.WATER;
+        }
+      }
+    }
+
+    for (const torch of this.torches) {
+      torch.updateParticles(delta);
+      const dx = this.player.x - torch.x;
+      const dy = this.player.y - torch.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < ELEMENTAL_CONFIG.HAZARD_TORCH_PROXIMITY && dist < closestDist) {
+        closestDist = dist;
+        closestElement = Element.FIRE;
+      }
+    }
+
+    if (closestElement !== null) {
+      this.player.elementalState.apply(closestElement);
+    }
+
+    // Enemy element/stun tints
+    const allEnemies = this.enemyGroup.getChildren() as Enemy[];
+    for (const enemy of allEnemies) {
+      if (!enemy.active) continue;
+      if (enemy.isCCStunned) {
+        enemy.setTint(0x88ccff);
+      } else if (enemy.elementalState.element !== null) {
+        const tints: Record<string, number> = {
+          WATER: 0x4488ff, FIRE: 0xff6600, THUNDER: 0xffff44, WIND: 0x88ffcc,
+        };
+        enemy.setTint(tints[enemy.elementalState.element] ?? 0xffffff);
+      }
+    }
   }
 
   private handleInput(): void {
