@@ -6,6 +6,7 @@ import type { Room } from '../systems/DungeonGenerator';
 import { RoomState } from '../systems/DungeonGenerator';
 import EventBus from '../systems/EventBus';
 import type { GameScene } from '../scenes/GameScene';
+import { ElementalState } from '../systems/ElementalState';
 
 export const EnemyState = {
   IDLE: 'IDLE',
@@ -39,6 +40,9 @@ export class Enemy extends Phaser.GameObjects.Image {
   public owner: Enemy | null = null;
   public minions: Enemy[] = [];
   public facingAngle: number = 0;
+  public elementalState: ElementalState = new ElementalState(true);
+  private ccStunRemainingMs: number = 0;
+  private preCCState: EnemyState | null = null;
 
   private chargeTargetX: number = 0;
   private chargeTargetY: number = 0;
@@ -93,6 +97,40 @@ export class Enemy extends Phaser.GameObjects.Image {
   }
 
   updateAI(player: Player, rooms: Room[]): void {
+    // CC Stun layer — independent of AI state
+    if (this.ccStunRemainingMs > 0) {
+      this.ccStunRemainingMs -= this.scene.game.loop.delta;
+      const body = this.body as Phaser.Physics.Arcade.Body;
+      body.setVelocity(0, 0);
+
+      // Electric sparks while stunned
+      if (Math.random() < 0.15) {
+        const spark = this.scene.add.graphics();
+        spark.fillStyle(0xaaddff, 0.8);
+        spark.fillCircle(0, 0, 2);
+        spark.setPosition(
+          this.x + Phaser.Math.Between(-16, 16),
+          this.y + Phaser.Math.Between(-16, 16),
+        );
+        spark.setDepth(86);
+        this.scene.tweens.add({
+          targets: spark,
+          alpha: 0,
+          duration: 150,
+          onComplete: () => spark.destroy(),
+        });
+      }
+
+      if (this.ccStunRemainingMs <= 0) {
+        this.ccStunRemainingMs = 0;
+        if (this.preCCState !== null) {
+          this.state = this.preCCState;
+          this.preCCState = null;
+        }
+      }
+      return;
+    }
+
     if (!this.active) return;
 
     const room = rooms[this.roomIndex];
@@ -292,6 +330,25 @@ export class Enemy extends Phaser.GameObjects.Image {
     this.setTint(0x888888);
   }
 
+  applyCCStun(durationMs: number): void {
+    let dur = durationMs;
+    if (this.state === EnemyState.KNOCKBACK) {
+      const remaining = Math.max(0, this.knockbackTimer);
+      dur = Math.max(0, dur - remaining);
+    }
+    if (dur <= 0) return;
+    if (this.ccStunRemainingMs <= 0) {
+      this.preCCState = this.state;
+    }
+    this.ccStunRemainingMs = Math.max(this.ccStunRemainingMs, dur);
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+  }
+
+  get isCCStunned(): boolean {
+    return this.ccStunRemainingMs > 0;
+  }
+
   private updateSummonAI(player: Player, rooms: Room[]): void {
     if (!this.config.summonConfig) return;
     const cfg = this.config.summonConfig;
@@ -465,6 +522,9 @@ export class Enemy extends Phaser.GameObjects.Image {
         }
       }
     }
+
+    this.elementalState.clear();
+    this.ccStunRemainingMs = 0;
 
     // Only emit enemy-killed for non-summons
     if (!this.isSummon) {

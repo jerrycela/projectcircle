@@ -223,12 +223,33 @@ export class SkillButton {
         );
         break;
 
-      case 'arcane-bolt':
-        // Blue-purple orb
-        this.iconGraphics.fillStyle(0x9933ff, alpha);
-        this.iconGraphics.fillCircle(this.x, this.y, 12);
-        this.iconGraphics.fillStyle(0xcc66ff, alpha * 0.8);
-        this.iconGraphics.fillCircle(this.x - 3, this.y - 3, 5);
+      case 'tornado':
+        // Swirling wind lines
+        this.iconGraphics.lineStyle(2, 0x88ffcc, alpha);
+        this.iconGraphics.beginPath();
+        this.iconGraphics.arc(this.x, this.y, 16, 0, Math.PI * 1.2, false);
+        this.iconGraphics.strokePath();
+        this.iconGraphics.beginPath();
+        this.iconGraphics.arc(this.x, this.y - 4, 10, Math.PI, Math.PI * 2.2, false);
+        this.iconGraphics.strokePath();
+        this.iconGraphics.beginPath();
+        this.iconGraphics.arc(this.x, this.y + 4, 6, 0, Math.PI * 1.5, false);
+        this.iconGraphics.strokePath();
+        break;
+
+      case 'thunderstorm':
+        // Lightning bolt shape
+        this.iconGraphics.fillStyle(0xffff44, alpha);
+        this.iconGraphics.beginPath();
+        this.iconGraphics.moveTo(this.x - 2, this.y - 16);
+        this.iconGraphics.lineTo(this.x + 8, this.y - 16);
+        this.iconGraphics.lineTo(this.x + 2, this.y - 2);
+        this.iconGraphics.lineTo(this.x + 10, this.y - 2);
+        this.iconGraphics.lineTo(this.x - 4, this.y + 16);
+        this.iconGraphics.lineTo(this.x, this.y + 2);
+        this.iconGraphics.lineTo(this.x - 8, this.y + 2);
+        this.iconGraphics.closePath();
+        this.iconGraphics.fillPath();
         break;
 
       default:

@@ -49,6 +49,7 @@ export const GAME_CONFIG = {
   ALTAR_SIZE: 48,
   ALTAR_REROLL_COST: 20,
   SKILL_MAX_LEVEL: 3,
+  SKILL_SLOT_COUNT: 3,
 
   // Recovery (HP regen)
   PLAYER_RECOVERY: 0, // base recovery (0 = none until upgraded)
@@ -56,6 +57,42 @@ export const GAME_CONFIG = {
   // Armor
   PLAYER_ARMOR: 0, // base armor (0 = none until upgraded)
 } as const;
+
+// ---- Elemental System ----
+
+export const Element = {
+  WATER: 'WATER',
+  FIRE: 'FIRE',
+  THUNDER: 'THUNDER',
+  WIND: 'WIND',
+} as const;
+
+export type Element = (typeof Element)[keyof typeof Element];
+
+export const ELEMENTAL_CONFIG = {
+  ELEMENT_ATTACH_DURATION_MS: 10000,
+  ELEMENT_FLICKER_START_MS: 3000,
+  ELECTRO_STORM_BONUS_RATIO: 0.5,
+  CHAIN_LIGHTNING_RANGE: 120,
+  CHAIN_LIGHTNING_MAX_JUMPS: 4,
+  CHAIN_LIGHTNING_DECAY: [0.8, 0.6, 0.4, 0.2],
+  ELECTRO_STUN_DURATION_MS: 1500,
+  FLAME_BURST_BONUS_RATIO: 1.5,
+  FLAME_AURA_DURATION_MS: 1000,
+  HAZARD_TORCH_PROXIMITY: 48,
+  HAZARD_ROOM_TORCH_CHANCE: 0.3,
+  HAZARD_ROOM_TORCH_COUNT: { min: 1, max: 2 },
+  HAZARD_ROOM_WATER_CHANCE: 0.2,
+  HAZARD_CORRIDOR_WATER_CHANCE: 0.1,
+} as const;
+
+export type HazardType = 'water-pool' | 'torch';
+
+export interface HazardData {
+  type: HazardType;
+  tileX: number;
+  tileY: number;
+}
 
 export interface UpgradeDefinition {
   name: string;
@@ -224,6 +261,8 @@ export interface SkillDefinition {
   cooldownMs: number;
   castDurationMs: number;
   damageMultiplier: number;
+  category: 'physical' | 'magic';
+  fixedElement?: Element;
   radius?: number;
   dashDistance?: number;
   dashDurationMs?: number;
@@ -231,6 +270,9 @@ export interface SkillDefinition {
   projectileSpeed?: number;
   projectileRange?: number;
   pierceCount?: number;
+  tickIntervalMs?: number;
+  tickDamageMultiplier?: number;
+  maxTravelDistance?: number;
   levelScaling: SkillLevelData[];
 }
 
@@ -243,6 +285,7 @@ export const SKILL_DEFS: Record<string, SkillDefinition> = {
     cooldownMs: 4000,
     castDurationMs: 300,
     damageMultiplier: 1.5,
+    category: 'physical',
     radius: 100,
     levelScaling: [
       { damageMultiplier: 1.5, radius: 100 },
@@ -258,6 +301,7 @@ export const SKILL_DEFS: Record<string, SkillDefinition> = {
     cooldownMs: 3000,
     castDurationMs: 200,
     damageMultiplier: 0.8,
+    category: 'physical',
     dashDistance: 150,
     dashDurationMs: 200,
     dashPathWidth: 32,
@@ -267,21 +311,42 @@ export const SKILL_DEFS: Record<string, SkillDefinition> = {
       { damageMultiplier: 1.2, dashDistance: 190 },
     ],
   },
-  'arcane-bolt': {
-    type: 'arcane-bolt',
-    name: 'Arcane Bolt',
-    description: 'Fires a piercing magical projectile',
+  tornado: {
+    type: 'tornado',
+    name: 'Tornado',
+    description: 'Launches a wind column that damages enemies in its path',
     mpCost: 30,
-    cooldownMs: 5000,
-    castDurationMs: 100,
-    damageMultiplier: 2.0,
-    projectileSpeed: 350,
-    projectileRange: 300,
-    pierceCount: 2,
+    cooldownMs: 6000,
+    castDurationMs: 200,
+    damageMultiplier: 0.4,
+    category: 'magic',
+    fixedElement: Element.WIND,
+    radius: 48,
+    projectileSpeed: 200,
+    maxTravelDistance: 300,
+    tickIntervalMs: 100,
+    tickDamageMultiplier: 0.4,
     levelScaling: [
-      { damageMultiplier: 2.0, pierceCount: 2 },
-      { damageMultiplier: 2.4, pierceCount: 3 },
-      { damageMultiplier: 2.8, pierceCount: 4 },
+      { damageMultiplier: 0.4, radius: 48 },
+      { damageMultiplier: 0.5, radius: 52 },
+      { damageMultiplier: 0.6, radius: 56 },
+    ],
+  },
+  thunderstorm: {
+    type: 'thunderstorm',
+    name: 'Thunderstorm',
+    description: 'Strikes a target area with lightning',
+    mpCost: 35,
+    cooldownMs: 8000,
+    castDurationMs: 300,
+    damageMultiplier: 1.8,
+    category: 'magic',
+    fixedElement: Element.THUNDER,
+    radius: 80,
+    levelScaling: [
+      { damageMultiplier: 1.8, radius: 80 },
+      { damageMultiplier: 2.1, radius: 88 },
+      { damageMultiplier: 2.4, radius: 96 },
     ],
   },
 };

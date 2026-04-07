@@ -6,6 +6,8 @@ import EventBus from './EventBus';
 import type { StatsManager } from './StatsManager';
 import type { SkillManager } from './SkillManager';
 import type { EquipmentManager } from './EquipmentManager';
+import { ReactionResolver } from './ReactionResolver';
+import type { HitContext } from './ReactionResolver';
 
 export class CombatSystem {
   private scene: GameScene;
@@ -106,9 +108,6 @@ export class CombatSystem {
     // Weapon swing visual arc
     this.spawnAttackArc(player.x, player.y, enemy.x, enemy.y);
 
-    // Floating damage number
-    this.spawnDamageNumber(enemy.x, enemy.y, damage, isCrit);
-
     // Enemy hit flash + shake
     this.flashEnemy(enemy);
     this.shakeEnemy(enemy);
@@ -119,12 +118,27 @@ export class CombatSystem {
     // Purple particles
     this.spawnHitParticles(enemy.x, enemy.y);
 
-    // Apply knockback
+    // ---- Authoritative Damage Pipeline ----
+    const attackElement = this.scene.player.elementalState?.element ?? null;
+
+    const hitContext: HitContext = {
+      source: 'auto-attack',
+      attackElement,
+      hitPosition: { x: enemy.x, y: enemy.y },
+      alreadyHitIds: new Set(),
+      isSecondaryProc: false,
+    };
+
+    const result = ReactionResolver.resolve(enemy, hitContext);
+    const totalDamage = damage + result.bonusDamage;
+
+    // Floating damage number (after reaction resolve to include bonus)
+    this.spawnDamageNumber(enemy.x, enemy.y, totalDamage, isCrit);
+
+    // Apply knockback + damage
     const knockbackX = nx * GAME_CONFIG.KNOCKBACK_FORCE;
     const knockbackY = ny * GAME_CONFIG.KNOCKBACK_FORCE;
-
-    // Deal damage to enemy
-    enemy.takeDamage(damage, knockbackX, knockbackY, player.x, player.y);
+    enemy.takeDamage(totalDamage, knockbackX, knockbackY, player.x, player.y);
   }
 
   private spawnAttackArc(

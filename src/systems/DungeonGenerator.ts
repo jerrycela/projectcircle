@@ -1,4 +1,6 @@
-import { GAME_CONFIG } from '../config';
+import Phaser from 'phaser';
+import { GAME_CONFIG, ELEMENTAL_CONFIG } from '../config';
+import type { HazardData } from '../config';
 
 export const RoomState = {
   UNVISITED: 'UNVISITED',
@@ -22,6 +24,7 @@ export interface Room {
 export interface DungeonData {
   grid: number[][];
   rooms: Room[];
+  hazards: HazardData[];
 }
 
 const MAX_RETRIES = 10;
@@ -111,7 +114,7 @@ function isConnected(grid: number[][], rooms: Room[]): boolean {
   return true;
 }
 
-function tryGenerate(roomCount: number, roomSizeMin?: number, roomSizeMax?: number): DungeonData | null {
+function tryGenerate(roomCount: number, roomSizeMin?: number, roomSizeMax?: number): Omit<DungeonData, 'hazards'> | null {
   const width = GAME_CONFIG.MAP_WIDTH;
   const height = GAME_CONFIG.MAP_HEIGHT;
   const roomMin = roomSizeMin ?? GAME_CONFIG.ROOM_SIZE.min;
@@ -196,6 +199,91 @@ function assignAltarRoom(rooms: Room[]): void {
   console.log(`[DungeonGenerator] Altar room assigned: room ${rooms.indexOf(pick)}`);
 }
 
+function generateHazards(grid: number[][], rooms: Room[]): HazardData[] {
+  const hazards: HazardData[] = [];
+  const width = grid[0].length;
+  const height = grid.length;
+
+  for (let i = 0; i < rooms.length; i++) {
+    const room = rooms[i];
+    if (room.state === RoomState.ALTAR) continue;
+
+    if (Math.random() < ELEMENTAL_CONFIG.HAZARD_ROOM_TORCH_CHANCE) {
+      const torchCount = Phaser.Math.Between(
+        ELEMENTAL_CONFIG.HAZARD_ROOM_TORCH_COUNT.min,
+        ELEMENTAL_CONFIG.HAZARD_ROOM_TORCH_COUNT.max,
+      );
+      const wallTiles = getWallAdjacentTiles(grid, room);
+      const shuffled = Phaser.Utils.Array.Shuffle([...wallTiles]);
+      for (let t = 0; t < Math.min(torchCount, shuffled.length); t++) {
+        hazards.push({ type: 'torch', tileX: shuffled[t].x, tileY: shuffled[t].y });
+      }
+    }
+
+    if (Math.random() < ELEMENTAL_CONFIG.HAZARD_ROOM_WATER_CHANCE) {
+      const poolTile = findPoolTile(grid, room);
+      if (poolTile) {
+        hazards.push({ type: 'water-pool', tileX: poolTile.x, tileY: poolTile.y });
+      }
+    }
+  }
+
+  for (let gy = 1; gy < height - 2; gy++) {
+    for (let gx = 1; gx < width - 2; gx++) {
+      if (grid[gy][gx] !== 0) continue;
+      const inRoom = rooms.some(r =>
+        gx >= r.x && gx < r.x + r.width && gy >= r.y && gy < r.y + r.height,
+      );
+      if (inRoom) continue;
+      if (Math.random() < ELEMENTAL_CONFIG.HAZARD_CORRIDOR_WATER_CHANCE) {
+        if (gx + 1 < width && gy + 1 < height &&
+            grid[gy][gx + 1] === 0 && grid[gy + 1][gx] === 0 && grid[gy + 1][gx + 1] === 0) {
+          hazards.push({ type: 'water-pool', tileX: gx, tileY: gy });
+        }
+      }
+    }
+  }
+
+  return hazards;
+}
+
+function getWallAdjacentTiles(grid: number[][], room: Room): Array<{ x: number; y: number }> {
+  const tiles: Array<{ x: number; y: number }> = [];
+  const dirs: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  for (let gy = room.y; gy < room.y + room.height; gy++) {
+    for (let gx = room.x; gx < room.x + room.width; gx++) {
+      if (grid[gy][gx] !== 0) continue;
+      for (const [dx, dy] of dirs) {
+        const nx = gx + dx;
+        const ny = gy + dy;
+        if (nx >= 0 && nx < grid[0].length && ny >= 0 && ny < grid.length && grid[ny][nx] === 1) {
+          tiles.push({ x: gx, y: gy });
+          break;
+        }
+      }
+    }
+  }
+  return tiles;
+}
+
+function findPoolTile(grid: number[][], room: Room): { x: number; y: number } | null {
+  const candidates: Array<{ x: number; y: number }> = [];
+  for (let gy = room.y + 1; gy < room.y + room.height - 1; gy++) {
+    for (let gx = room.x + 1; gx < room.x + room.width - 1; gx++) {
+      if (
+        grid[gy][gx] === 0 &&
+        grid[gy][gx + 1] === 0 &&
+        grid[gy + 1][gx] === 0 &&
+        grid[gy + 1][gx + 1] === 0
+      ) {
+        candidates.push({ x: gx, y: gy });
+      }
+    }
+  }
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
 export interface GenerateOptions {
   roomCount?: { min: number; max: number };
   roomSize?: { min: number; max: number };
@@ -213,7 +301,9 @@ export function generate(options?: GenerateOptions): DungeonData {
       if (result !== null) {
         console.log(`[DungeonGenerator] Generated dungeon with ${result.rooms.length} rooms (target: ${roomCount})`);
         assignAltarRoom(result.rooms);
-        return result;
+        const hazards = generateHazards(result.grid, result.rooms);
+        console.log(`[DungeonGenerator] Generated ${hazards.length} hazards`);
+        return { ...result, hazards };
       }
     }
   }
@@ -227,5 +317,5 @@ export function generate(options?: GenerateOptions): DungeonData {
     state: RoomState.UNVISITED,
   };
   carveRoom(grid, fallbackRoom);
-  return { grid, rooms: [fallbackRoom] };
+  return { grid, rooms: [fallbackRoom], hazards: [] };
 }

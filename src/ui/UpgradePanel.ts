@@ -240,7 +240,7 @@ export class UpgradePanel {
     } else {
       // Learn new skill
       const slotCount = this.skillManager.getSkillCount();
-      if (slotCount < 2) {
+      if (slotCount < GAME_CONFIG.SKILL_SLOT_COUNT) {
         // Has empty slot
         this.skillManager.addSkill(skillKey);
         this.showFlash(cx, cy - 60, `${def.name} acquired!`);
@@ -278,7 +278,7 @@ export class UpgradePanel {
     this.container.add(newInfo);
 
     // Show two slot buttons
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < GAME_CONFIG.SKILL_SLOT_COUNT; i++) {
       const slotType = this.skillManager.getSlotType(i);
       const slotLevel = this.skillManager.getSlotLevel(i);
       if (!slotType) continue;
@@ -314,7 +314,7 @@ export class UpgradePanel {
     }
 
     // Cancel button — return to skill panel with same cards
-    const cancelY = 240 + 2 * 100 + 20;
+    const cancelY = 240 + GAME_CONFIG.SKILL_SLOT_COUNT * 100 + 20;
     const cancelBg = this.scene.add.rectangle(width / 2, cancelY, 120, 40, 0x333333);
     cancelBg.setStrokeStyle(1, 0x666666);
     cancelBg.setInteractive({ useHandCursor: true });
