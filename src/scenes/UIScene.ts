@@ -111,6 +111,7 @@ export class UIScene extends Phaser.Scene {
       this.upgradePanel.destroy();
       this.companionPanel.destroy();
       this.initialSkillPanel.destroy();
+      this.destroyDeathText();
       if (this.rescueBtn) { this.rescueBtn.destroy(); this.rescueBtn = undefined; }
     });
 
