@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
 import { SKILL_DEFS, GAME_CONFIG } from '../config';
+import { Element, ELEMENTAL_CONFIG } from '../config';
 import type { SkillDefinition, SkillLevelData } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import type { Enemy } from '../entities/Enemy';
 import EventBus from './EventBus';
+import { ReactionResolver } from './ReactionResolver';
+import type { HitContext } from './ReactionResolver';
 
 export type SkillSlotState = 'EMPTY' | 'READY' | 'CASTING' | 'COOLDOWN';
 
@@ -16,14 +19,14 @@ interface SkillSlot {
 
 export class SkillManager {
   private scene: GameScene;
-  private slots: [SkillSlot, SkillSlot];
+  private slots: SkillSlot[];
 
   constructor(scene: GameScene) {
     this.scene = scene;
-    this.slots = [
-      { type: null, state: 'EMPTY', cooldownRemaining: 0, level: 0 },
-      { type: null, state: 'EMPTY', cooldownRemaining: 0, level: 0 },
-    ];
+    this.slots = [];
+    for (let i = 0; i < GAME_CONFIG.SKILL_SLOT_COUNT; i++) {
+      this.slots.push({ type: null, state: 'EMPTY', cooldownRemaining: 0, level: 0 });
+    }
   }
 
   // ------------------------------------------------------------------ QUERIES
@@ -275,8 +278,11 @@ export class SkillManager {
       case 'shadow-dash':
         this.executeShadowDash(def, scaling);
         break;
-      case 'arcane-bolt':
-        this.executeArcaneBolt(def, scaling);
+      case 'tornado':
+        this.executeTornado(def, scaling);
+        break;
+      case 'thunderstorm':
+        this.executeThunderstorm(def, scaling);
         break;
       default:
         console.warn(`[SkillManager] Unknown skill: ${type}`);
@@ -333,11 +339,25 @@ export class SkillManager {
       if (dist <= radius) {
         const level = this.getSkillLevel(def.type);
         const dmg = this.calcSkillDamage(def, level);
-        this.spawnSkillDamageNumber(enemy.x, enemy.y, dmg);
-        // Knockback outward
+
+        const attackElement = def.category === 'magic'
+          ? (def.fixedElement ?? null)
+          : (this.scene.player.elementalState.element ?? null);
+
+        const hitContext: HitContext = {
+          source: 'skill',
+          skillType: def.type,
+          attackElement,
+          hitPosition: { x: enemy.x, y: enemy.y },
+          alreadyHitIds: new Set(),
+          isSecondaryProc: false,
+        };
+
+        const result = ReactionResolver.resolve(enemy, hitContext);
+        this.spawnSkillDamageNumber(enemy.x, enemy.y, dmg + result.bonusDamage);
         const nx = dist > 0 ? dx / dist : 1;
         const ny = dist > 0 ? dy / dist : 0;
-        enemy.takeDamage(dmg, nx * 80, ny * 80, player.x, player.y);
+        enemy.takeDamage(dmg + result.bonusDamage, nx * 80, ny * 80, player.x, player.y);
       }
     }
   }
@@ -516,148 +536,222 @@ export class SkillManager {
       if (perp <= halfWidth) {
         hitEnemies.add(enemy);
         const dmg = this.calcSkillDamage(def, level);
-        this.spawnSkillDamageNumber(enemy.x, enemy.y, dmg);
-        enemy.takeDamage(dmg, nx * 60, ny * 60, startX, startY);
+
+        const attackElement = def.category === 'magic'
+          ? (def.fixedElement ?? null)
+          : (this.scene.player.elementalState.element ?? null);
+
+        const hitContext: HitContext = {
+          source: 'skill',
+          skillType: def.type,
+          attackElement,
+          hitPosition: { x: enemy.x, y: enemy.y },
+          alreadyHitIds: new Set(),
+          isSecondaryProc: false,
+        };
+
+        const result = ReactionResolver.resolve(enemy, hitContext);
+        this.spawnSkillDamageNumber(enemy.x, enemy.y, dmg + result.bonusDamage);
+        enemy.takeDamage(dmg + result.bonusDamage, nx * 60, ny * 60, startX, startY);
       }
     }
   }
 
-  // ---- Arcane Bolt
+  // ---- Tornado
 
-  private executeArcaneBolt(def: SkillDefinition, scaling: SkillLevelData): void {
+  private executeTornado(def: SkillDefinition, scaling: SkillLevelData): void {
     const player = this.scene.player;
+    const radius = scaling.radius ?? def.radius ?? 48;
+    const speed = def.projectileSpeed ?? 200;
+    const maxDist = def.maxTravelDistance ?? 300;
+    const tickInterval = def.tickIntervalMs ?? 100;
 
-    // Determine fire direction based on facing
     const body = player.body as Phaser.Physics.Arcade.Body;
     const vx = body.velocity.x;
     const vy = body.velocity.y;
-    const speed = Math.sqrt(vx * vx + vy * vy);
+    const spd = Math.sqrt(vx * vx + vy * vy);
+    const dirX = spd > 1 ? vx / spd : (player.scaleX > 0 ? 1 : -1);
+    const dirY = spd > 1 ? vy / spd : 0;
 
-    let dirX: number;
-    let dirY: number;
-
-    if (speed > 1) {
-      dirX = vx / speed;
-      dirY = vy / speed;
-    } else {
-      dirX = player.scaleX > 0 ? 1 : -1;
-      dirY = 0;
-    }
-
-    const boltSpeed = def.projectileSpeed ?? 350;
-    const range = def.projectileRange ?? 300;
-    const maxHits = (scaling.pierceCount ?? def.pierceCount ?? 2) + 1; // pierceCount=2 means hits 3 total
-
-    // Create projectile as a Graphics object (visual) + physics body
-    const bolt = this.scene.add.graphics();
-    bolt.fillStyle(0x9933ff, 1.0);
-    bolt.fillCircle(0, 0, 8);
-    bolt.setPosition(player.x, player.y);
-    bolt.setDepth(75);
-
-    // Enable physics on the graphics object
-    this.scene.physics.world.enable(bolt);
-    const boltBody = (bolt as unknown as { body: Phaser.Physics.Arcade.Body }).body as Phaser.Physics.Arcade.Body;
-    boltBody.setCircle(8, -8, -8);
-    boltBody.setVelocity(dirX * boltSpeed, dirY * boltSpeed);
-
-    // Add to projectile group
-    this.scene.projectileGroup.add(bolt);
-
-    const hitEnemies = new Set<Enemy>();
-    let hitCount = 0;
     const startX = player.x;
     const startY = player.y;
+    let posX = startX;
+    let posY = startY;
     let destroyed = false;
+    let tickTimer = 0;
+    let hasFlameAura = false;
+    let flameAuraTimer = 0;
 
-    const destroyBolt = () => {
-      if (destroyed) return;
-      destroyed = true;
-      this.spawnArcaneBoltExplosion(bolt.x, bolt.y);
-      bolt.destroy();
-    };
+    const tornado = this.scene.add.graphics();
+    tornado.setDepth(75);
 
-    // Overlap check with enemy group
-    this.scene.physics.add.overlap(
-      bolt as unknown as Phaser.GameObjects.GameObject,
-      this.scene.enemyGroup,
-      (boltObj, enemyObj) => {
-        if (destroyed) return;
-        const enemy = enemyObj as Enemy;
-        if (!enemy.active || hitEnemies.has(enemy)) return;
+    const hitThisTick = new Set<Enemy>();
 
-        hitEnemies.add(enemy);
-        hitCount++;
-
-        const level = this.getSkillLevel(def.type);
-        const dmg = this.calcSkillDamage(def, level);
-        this.spawnSkillDamageNumber(enemy.x, enemy.y, dmg);
-        enemy.takeDamage(dmg, dirX * 60, dirY * 60, startX, startY);
-
-        if (hitCount >= maxHits) {
-          destroyBolt();
-        }
-      },
-    );
-
-    // Particle trail + range check via update event
-    const updateListener = () => {
+    const updateListener = (_time: number, delta: number) => {
       if (destroyed) return;
 
-      // Range check
-      const dx = bolt.x - startX;
-      const dy = bolt.y - startY;
-      if (Math.sqrt(dx * dx + dy * dy) >= range) {
-        destroyBolt();
+      posX += dirX * speed * (delta / 1000);
+      posY += dirY * speed * (delta / 1000);
+
+      const travelDx = posX - startX;
+      const travelDy = posY - startY;
+      if (Math.sqrt(travelDx * travelDx + travelDy * travelDy) >= maxDist) {
+        destroyTornado();
         return;
       }
 
-      // Particle trail — 3 small circles per frame
-      for (let i = 0; i < 3; i++) {
-        const particle = this.scene.add.graphics();
-        particle.fillStyle(0x6600cc, 0.7);
-        particle.fillCircle(0, 0, Phaser.Math.Between(2, 4));
-        particle.setPosition(bolt.x + Phaser.Math.Between(-4, 4), bolt.y + Phaser.Math.Between(-4, 4));
-        particle.setDepth(74);
+      if (hasFlameAura) {
+        flameAuraTimer -= delta;
+        if (flameAuraTimer <= 0) {
+          hasFlameAura = false;
+        }
+      }
 
-        this.scene.tweens.add({
-          targets: particle,
-          alpha: 0,
-          duration: 100,
-          ease: 'Linear',
-          onComplete: () => { particle.destroy(); },
-        });
+      tornado.clear();
+      const color = hasFlameAura ? 0xff4400 : 0x88ffcc;
+      tornado.fillStyle(color, 0.6);
+      tornado.fillCircle(posX, posY, radius);
+      tornado.lineStyle(2, color, 0.8);
+      tornado.strokeCircle(posX, posY, radius);
+
+      tickTimer -= delta;
+      if (tickTimer <= 0) {
+        tickTimer = tickInterval;
+        hitThisTick.clear();
+
+        const enemies = this.scene.enemyGroup.getChildren() as Enemy[];
+        for (const enemy of enemies) {
+          if (!enemy.active || hitThisTick.has(enemy)) continue;
+          const edx = enemy.x - posX;
+          const edy = enemy.y - posY;
+          const edist = Math.sqrt(edx * edx + edy * edy);
+          if (edist > radius) continue;
+
+          hitThisTick.add(enemy);
+          const level = this.getSkillLevel(def.type);
+          const dmg = this.calcSkillDamage(def, level);
+
+          const hitContext: HitContext = {
+            source: 'skill',
+            skillType: 'tornado',
+            attackElement: hasFlameAura ? Element.FIRE : Element.WIND,
+            hitPosition: { x: enemy.x, y: enemy.y },
+            alreadyHitIds: new Set(),
+            isSecondaryProc: hasFlameAura,
+          };
+
+          const result = ReactionResolver.resolve(enemy, hitContext);
+
+          if (result.flameAura) {
+            hasFlameAura = true;
+            flameAuraTimer = ELEMENTAL_CONFIG.FLAME_AURA_DURATION_MS;
+          }
+
+          this.spawnSkillDamageNumber(enemy.x, enemy.y, dmg + result.bonusDamage);
+          enemy.takeDamage(dmg + result.bonusDamage, dirX * 30, dirY * 30, posX, posY);
+        }
       }
     };
 
-    this.scene.events.on('update', updateListener);
-
-    // Cleanup listener when bolt is destroyed
-    bolt.on('destroy', () => {
+    const destroyTornado = () => {
+      if (destroyed) return;
+      destroyed = true;
       this.scene.events.off('update', updateListener);
-    });
+      tornado.destroy();
+    };
+
+    this.scene.events.on('update', updateListener);
+    const maxTime = (maxDist / speed) * 1000 + 500;
+    this.scene.time.delayedCall(maxTime, destroyTornado);
   }
 
-  private spawnArcaneBoltExplosion(x: number, y: number): void {
-    for (let i = 0; i < 8; i++) {
-      const particle = this.scene.add.graphics();
-      particle.fillStyle(0x9933ff, 1.0);
-      particle.fillCircle(0, 0, Phaser.Math.Between(3, 6));
-      particle.setPosition(x, y);
-      particle.setDepth(76);
+  // ---- Thunderstorm
 
-      const angle = (i / 8) * Math.PI * 2;
-      const speed = Phaser.Math.Between(50, 120);
+  private executeThunderstorm(def: SkillDefinition, scaling: SkillLevelData): void {
+    const player = this.scene.player;
+    const radius = scaling.radius ?? def.radius ?? 80;
+    const level = this.getSkillLevel(def.type);
+    const dmg = this.calcSkillDamage(def, level);
+
+    const body = player.body as Phaser.Physics.Arcade.Body;
+    const vx = body.velocity.x;
+    const vy = body.velocity.y;
+    const spd = Math.sqrt(vx * vx + vy * vy);
+    const dirX = spd > 1 ? vx / spd : (player.scaleX > 0 ? 1 : -1);
+    const dirY = spd > 1 ? vy / spd : 0;
+
+    const targetX = player.x + dirX * 120;
+    const targetY = player.y + dirY * 120;
+
+    this.scene.cameras.main.shake(150, 0.01);
+    this.spawnThunderstormVisual(targetX, targetY, radius);
+
+    const enemies = this.scene.enemyGroup.getChildren() as Enemy[];
+    for (const enemy of enemies) {
+      if (!enemy.active) continue;
+      const dx = enemy.x - targetX;
+      const dy = enemy.y - targetY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > radius) continue;
+
+      const hitContext: HitContext = {
+        source: 'skill',
+        skillType: 'thunderstorm',
+        attackElement: Element.THUNDER,
+        hitPosition: { x: enemy.x, y: enemy.y },
+        alreadyHitIds: new Set(),
+        isSecondaryProc: false,
+      };
+
+      const result = ReactionResolver.resolve(enemy, hitContext);
+      this.spawnSkillDamageNumber(enemy.x, enemy.y, dmg + result.bonusDamage);
+
+      const nx = dist > 0 ? dx / dist : 0;
+      const ny = dist > 0 ? dy / dist : 0;
+      enemy.takeDamage(dmg + result.bonusDamage, nx * 50, ny * 50, targetX, targetY);
+    }
+  }
+
+  private spawnThunderstormVisual(cx: number, cy: number, radius: number): void {
+    const circle = this.scene.add.graphics();
+    circle.fillStyle(0xffff44, 0.4);
+    circle.fillCircle(cx, cy, radius);
+    circle.lineStyle(3, 0xffff88, 0.8);
+    circle.strokeCircle(cx, cy, radius);
+    circle.setDepth(79);
+
+    for (let i = 0; i < 3; i++) {
+      const bolt = this.scene.add.graphics();
+      bolt.lineStyle(2, 0xffff88, 1.0);
+      bolt.beginPath();
+      const startOffX = Phaser.Math.Between(-radius / 2, radius / 2);
+      bolt.moveTo(cx + startOffX, cy - radius);
+      let bx = cx + startOffX;
+      let by = cy - radius;
+      for (let s = 0; s < 4; s++) {
+        bx += Phaser.Math.Between(-20, 20);
+        by += radius * 2 / 4;
+        bolt.lineTo(bx, by);
+      }
+      bolt.strokePath();
+      bolt.setDepth(80);
 
       this.scene.tweens.add({
-        targets: particle,
-        x: x + Math.cos(angle) * speed,
-        y: y + Math.sin(angle) * speed,
+        targets: bolt,
         alpha: 0,
-        duration: 300,
-        ease: 'Cubic.Out',
-        onComplete: () => { particle.destroy(); },
+        duration: 200,
+        delay: 50 * i,
+        ease: 'Linear',
+        onComplete: () => bolt.destroy(),
       });
     }
+
+    this.scene.tweens.add({
+      targets: circle,
+      alpha: 0,
+      duration: 300,
+      ease: 'Linear',
+      onComplete: () => circle.destroy(),
+    });
   }
 }
