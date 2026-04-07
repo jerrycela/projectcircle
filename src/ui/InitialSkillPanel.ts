@@ -11,6 +11,7 @@ export class InitialSkillPanel {
   private scene: Phaser.Scene;
   private container: Phaser.GameObjects.Container;
   private skillManager: SkillManager | null = null;
+  private picked = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -21,6 +22,7 @@ export class InitialSkillPanel {
 
   show(skillManager: SkillManager): void {
     this.skillManager = skillManager;
+    this.picked = false;
 
     EventBus.emit('ui-input-lock');
     EventBus.emit('gameplay-lock', true);
@@ -32,6 +34,8 @@ export class InitialSkillPanel {
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     const cards = shuffled.slice(0, Math.min(3, shuffled.length));
+
+    if (cards.length === 0) { this.close(); return; }
 
     this.render(cards);
   }
@@ -138,18 +142,20 @@ export class InitialSkillPanel {
   }
 
   private onCardClicked(skillKey: string, cx: number, cy: number): void {
-    if (!this.skillManager) return;
+    if (this.picked || !this.skillManager) return;
+    this.picked = true;
 
     const def = SKILL_DEFS[skillKey];
     this.skillManager.addSkill(skillKey);
 
-    // Flash feedback
+    // Flash feedback (added to container so destroy() cleans it up)
     const flash = this.scene.add.text(cx, cy - 60, `${def.name} acquired!`, {
       fontSize: '14px', color: '#ffffff', fontFamily: 'monospace',
       stroke: '#000000', strokeThickness: 2,
     });
     flash.setOrigin(0.5, 0.5);
     flash.setDepth(310);
+    this.container.add(flash);
 
     this.scene.tweens.add({
       targets: flash,
@@ -157,7 +163,6 @@ export class InitialSkillPanel {
       alpha: 0,
       duration: 800,
       ease: 'Cubic.Out',
-      onComplete: () => flash.destroy(),
     });
 
     // Close after short delay
@@ -170,13 +175,20 @@ export class InitialSkillPanel {
     this.container.setVisible(false);
     this.container.removeAll(true);
     this.skillManager = null;
+    this.picked = false;
 
     EventBus.emit('ui-input-unlock');
     EventBus.emit('gameplay-lock', false);
   }
 
   destroy(): void {
+    if (this.skillManager !== null) {
+      EventBus.emit('ui-input-unlock');
+      EventBus.emit('gameplay-lock', false);
+    }
     this.container.setVisible(false);
     this.container.removeAll(true);
+    this.skillManager = null;
+    this.picked = false;
   }
 }
