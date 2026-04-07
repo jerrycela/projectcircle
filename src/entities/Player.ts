@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config';
 import EventBus from '../systems/EventBus';
 import type { StatsManager } from '../systems/StatsManager';
+import { ElementalState } from '../systems/ElementalState';
 
 export class Player extends Phaser.GameObjects.Container {
   public hp: number;
@@ -13,6 +14,7 @@ export class Player extends Phaser.GameObjects.Container {
   public materials: { wood: number; ore: number; cloth: number } = { wood: 0, ore: 0, cloth: 0 };
   public invincible: boolean = false;
   public statsManager!: StatsManager;
+  public elementalState: ElementalState = new ElementalState(false);
 
   declare body: Phaser.Physics.Arcade.Body;
 
@@ -161,6 +163,37 @@ export class Player extends Phaser.GameObjects.Container {
     } else {
       // Immediately clear invincibility
       this.setAlpha(1.0);
+    }
+  }
+
+  updateElementVisual(): void {
+    const el = this.elementalState.element;
+    if (el === null) {
+      this.baseSprite.clearTint();
+      this.baseSprite.setAlpha(1);
+      return;
+    }
+
+    const tints: Record<string, number> = {
+      WATER: 0x4488ff,
+      FIRE: 0xff6600,
+      THUNDER: 0xffff44,
+      WIND: 0x88ffcc,
+    };
+    const tint = tints[el] ?? 0xffffff;
+
+    if (this.elementalState.isFlickering()) {
+      const flicker = Math.floor(Date.now() / 200) % 2 === 0;
+      if (flicker) {
+        this.baseSprite.setTint(tint);
+        this.baseSprite.setAlpha(1);
+      } else {
+        this.baseSprite.clearTint();
+        this.baseSprite.setAlpha(0.7);
+      }
+    } else {
+      this.baseSprite.setTint(tint);
+      this.baseSprite.setAlpha(1);
     }
   }
 }
