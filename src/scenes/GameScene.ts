@@ -3,7 +3,7 @@ import { DebugManager } from '../debug/DebugManager';
 import { generate } from '../systems/DungeonGenerator';
 import { RoomState } from '../systems/DungeonGenerator';
 import type { Room } from '../systems/DungeonGenerator';
-import { GAME_CONFIG, Element, ELEMENTAL_CONFIG } from '../config';
+import { GAME_CONFIG, Element, ELEMENTAL_CONFIG, COMPANION_CONFIG, ENEMY_DEFS } from '../config';
 import type { EnemyConfig } from '../config';
 import { WaterPool } from '../entities/WaterPool';
 import { Torch } from '../entities/Torch';
@@ -20,6 +20,9 @@ import type { FloorState } from '../systems/FloorManager';
 import { Staircase } from '../entities/Staircase';
 import { SkillManager } from '../systems/SkillManager';
 import { EquipmentManager } from '../systems/EquipmentManager';
+import { CompanionManager } from '../systems/CompanionManager';
+import { Hostage, HostageState } from '../entities/Hostage';
+import type { HostageRoomData } from '../systems/DungeonGenerator';
 import type { EquipmentItem, EquipmentSlot } from '../config';
 
 export interface RunState {
@@ -32,6 +35,7 @@ export interface RunState {
   playerSkills?: Array<string | { type: string; level: number }>;
   playerEquipment?: Record<EquipmentSlot, EquipmentItem | null>;
   equipmentNextId?: number;
+  companionFloorAssignment?: Record<number, string>;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -41,6 +45,10 @@ export class GameScene extends Phaser.Scene {
   public statsManager!: StatsManager;
   public skillManager!: SkillManager;
   public equipmentManager!: EquipmentManager;
+  public companionManager!: CompanionManager;
+  private hostage?: Hostage;
+  private hostageRoomData: HostageRoomData | null = null;
+  private rescueButtonVisible: boolean = false;
   public gameplayLocked: boolean = false;
   private recoveryAccum: number = 0;
 
@@ -94,14 +102,25 @@ export class GameScene extends Phaser.Scene {
       this.statsManager.importState(this.runState.statsManagerState);
     }
 
+    // Companion manager
+    this.companionManager = new CompanionManager(() => this.floorManager.highestFloor);
+    if (this.runState?.companionFloorAssignment) {
+      this.companionManager.importFloorAssignment(this.runState.companionFloorAssignment);
+    } else {
+      this.companionManager.assignFloors();
+    }
+
     // Generate dungeon with floor-scaled config
     const floorConfig = this.floorManager.getFloorConfig();
-    const { grid, rooms, hazards } = generate({
+    const companionId = this.companionManager.getCompanionForFloor(this.floorManager.currentFloor);
+    const { grid, rooms, hazards, hostageRoom } = generate({
       roomCount: floorConfig.roomCount,
       roomSize: floorConfig.roomSize,
+      companionId,
     });
     this.grid = grid;
     this.rooms = rooms;
+    this.hostageRoomData = hostageRoom;
 
     const tileSize = GAME_CONFIG.TILE_SIZE;
     const mapPixelWidth = GAME_CONFIG.MAP_WIDTH * tileSize;
@@ -225,7 +244,7 @@ export class GameScene extends Phaser.Scene {
 
     // Loot group and system
     this.lootGroup = this.add.group();
-    this.lootSystem = new LootSystem(this, this.player, this.lootGroup, this.equipmentManager);
+    this.lootSystem = new LootSystem(this, this.player, this.lootGroup, this.equipmentManager, this.companionManager);
 
     // Projectile group (for arcane bolt, etc.)
     this.projectileGroup = this.physics.add.group();
@@ -256,6 +275,21 @@ export class GameScene extends Phaser.Scene {
       this.physics.pause();
       EventBus.emit('gameplay-lock', true);
       EventBus.emit('show-equipment-compare', item, loot);
+    });
+
+    // Rescue trigger from UIScene rescue button
+    EventBus.on('rescue-triggered', () => {
+      if (!this.hostage || this.hostage.hostageState !== HostageState.CAGED) return;
+
+      this.player.setInvincible(true);
+      EventBus.emit('hide-rescue-button');
+      this.rescueButtonVisible = false;
+
+      this.hostage.startRescue(() => {
+        this.player.setInvincible(false);
+        this.companionManager.rescue(this.hostage!.companionId);
+        this.hostage = undefined;
+      });
     });
 
     EventBus.on('equipment-compare-done', () => {
@@ -320,6 +354,11 @@ export class GameScene extends Phaser.Scene {
     EventBus.off('skill-cast-request');
     EventBus.off('equipment-pickup');
     EventBus.off('equipment-compare-done');
+    EventBus.off('rescue-triggered');
+    EventBus.off('hostage-guards-defeated');
+    EventBus.off('show-rescue-button');
+    EventBus.off('hide-rescue-button');
+    this.companionManager?.destroy();
     this.waterPools = [];
     this.torches = [];
   }
@@ -358,6 +397,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHazardElements(delta);
     this.altar?.update(time, delta);
     this.staircase?.update();
+    this.checkHostageInteraction();
     this.debugManager?.update();
   }
 
@@ -381,6 +421,10 @@ export class GameScene extends Phaser.Scene {
             room.state = RoomState.ACTIVE;
             const fc = this.floorManager.getFloorConfig();
             this.spawnEnemiesInRoom(i, fc.enemyHpScale, fc.enemyAtkScale, fc.enemiesPerRoom);
+            // Check if this is the hostage room
+            if (this.hostageRoomData && i === this.hostageRoomData.roomIndex) {
+              this.spawnHostageRoom(i, this.hostageRoomData.companionId, fc);
+            }
           }
         }
         return;
@@ -429,6 +473,7 @@ export class GameScene extends Phaser.Scene {
     const room = this.rooms[roomIndex];
     if (!room) return;
     if (room.state === RoomState.ALTAR) return;
+    if (this.hostageRoomData && roomIndex === this.hostageRoomData.roomIndex) return;
 
     const tileSize = GAME_CONFIG.TILE_SIZE;
     const countRange = countOverride ?? GAME_CONFIG.ENEMIES_PER_ROOM;
@@ -566,6 +611,7 @@ export class GameScene extends Phaser.Scene {
       playerSkills: this.skillManager.exportState().skills,
       playerEquipment: equipState.equipped,
       equipmentNextId: equipState.nextId,
+      companionFloorAssignment: this.companionManager.exportFloorAssignment(),
     };
     return { ...base, ...overrides };
   }
@@ -621,6 +667,92 @@ export class GameScene extends Phaser.Scene {
       } else {
         enemy.clearTint();
       }
+    }
+  }
+
+  private spawnHostageRoom(roomIndex: number, companionId: string, floorConfig: ReturnType<FloorManager['getFloorConfig']>): void {
+    const room = this.rooms[roomIndex];
+    const tileSize = GAME_CONFIG.TILE_SIZE;
+    const cx = room.centerX * tileSize + tileSize / 2;
+    const cy = room.centerY * tileSize + tileSize / 2;
+
+    // Spawn hostage at room center
+    this.hostage = new Hostage(this, cx, cy, companionId);
+
+    // Spawn wardens
+    const wardenCount = this.floorManager.currentFloor >= 4 ? 2 : 1;
+    const wardenDef = ENEMY_DEFS['warden'];
+
+    for (let w = 0; w < wardenCount; w++) {
+      const angle = (w / wardenCount) * Math.PI * 2;
+      const dist = 80;
+      const wx = cx + Math.cos(angle) * dist;
+      const wy = cy + Math.sin(angle) * dist;
+
+      const enemy = new Enemy(
+        this, wx, wy, roomIndex, wardenDef,
+        floorConfig.enemyHpScale * COMPANION_CONFIG.WARDEN_HP_MULT,
+        floorConfig.enemyAtkScale * COMPANION_CONFIG.WARDEN_ATK_MULT,
+      );
+      this.enemyGroup.add(enemy);
+    }
+
+    // Room overlay (cold tone)
+    const overlay = this.add.rectangle(
+      cx, cy,
+      room.width * tileSize, room.height * tileSize,
+      0x000033, 0.3,
+    );
+    overlay.setDepth(0);
+
+    // Listen for room cleared to fade overlay
+    const clearCheck = () => {
+      const r = this.rooms[roomIndex];
+      if (r.state === RoomState.CLEARED) {
+        this.tweens.add({
+          targets: overlay,
+          alpha: 0,
+          duration: 500,
+          onComplete: () => overlay.destroy(),
+        });
+        EventBus.off('room-cleared', clearCheck);
+      }
+    };
+    // Poll via checkRoomClearing — piggyback on room state change
+    this.time.addEvent({
+      delay: 500,
+      loop: true,
+      callback: () => {
+        if (this.rooms[roomIndex].state === RoomState.CLEARED) {
+          clearCheck();
+        }
+      },
+    });
+  }
+
+  private checkHostageInteraction(): void {
+    if (!this.hostage || this.hostage.hostageState !== HostageState.CAGED) {
+      if (this.rescueButtonVisible) {
+        EventBus.emit('hide-rescue-button');
+        this.rescueButtonVisible = false;
+      }
+      return;
+    }
+
+    // Only interactable after room is cleared
+    const roomData = this.hostageRoomData;
+    if (!roomData) return;
+    const room = this.rooms[roomData.roomIndex];
+    if (room.state !== RoomState.CLEARED) return;
+
+    if (this.hostage.isInRange(this.player.x, this.player.y)) {
+      if (!this.rescueButtonVisible) {
+        EventBus.emit('show-rescue-button');
+        this.rescueButtonVisible = true;
+      }
+    } else if (this.rescueButtonVisible) {
+      EventBus.emit('hide-rescue-button');
+      this.rescueButtonVisible = false;
     }
   }
 
