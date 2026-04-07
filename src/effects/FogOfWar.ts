@@ -1,15 +1,17 @@
 import Phaser from 'phaser';
 import type { Torch } from '../entities/Torch';
 
-const PLAYER_LIGHT_RADIUS = 224; // ~3.5 tiles
-const TORCH_LIGHT_RADIUS = 128;  // ~2 tiles
-const FOG_ALPHA = 0.85;
-const FLICKER_SPEED = 0.005; // radians per ms
+const PLAYER_LIGHT_RADIUS = 180; // tighter, more oppressive
+const TORCH_LIGHT_RADIUS = 128;
+const FOG_ALPHA = 0.95;           // almost black outside light
+const FLICKER_SPEED = 0.005;
 
 export class FogOfWar {
   private rt: Phaser.GameObjects.RenderTexture;
   private playerBrush: Phaser.GameObjects.Graphics;
   private torchBrush: Phaser.GameObjects.Graphics;
+  private warmOverlay: Phaser.GameObjects.Graphics;
+  private groundSpot: Phaser.GameObjects.Graphics;
   private flickerTime: number = 0;
 
   constructor(scene: Phaser.Scene, mapWidth: number, mapHeight: number) {
@@ -22,11 +24,11 @@ export class FogOfWar {
     // Drawn at (r, r) so center aligns when positioned at (playerX - r, playerY - r)
     const r = PLAYER_LIGHT_RADIUS;
     this.playerBrush = scene.make.graphics({ x: 0, y: 0 });
-    // Outer step: erase 0.30 → remaining 0.55
-    this.playerBrush.fillStyle(0xffffff, 0.30);
+    // Outer step: erase 0.35 → remaining 0.60
+    this.playerBrush.fillStyle(0xffffff, 0.35);
     this.playerBrush.fillCircle(r, r, r);
-    // Mid step: erase +0.30 → remaining 0.25
-    this.playerBrush.fillStyle(0xffffff, 0.30);
+    // Mid step: erase +0.35 → remaining 0.25
+    this.playerBrush.fillStyle(0xffffff, 0.35);
     this.playerBrush.fillCircle(r, r, r * 0.6);
     // Inner step: erase +0.25 → remaining ~0
     this.playerBrush.fillStyle(0xffffff, 0.25);
@@ -41,6 +43,18 @@ export class FogOfWar {
     this.torchBrush.fillCircle(tr, tr, tr * 0.6);
     this.torchBrush.fillStyle(0xffffff, 0.30);
     this.torchBrush.fillCircle(tr, tr, tr * 0.3);
+
+    // Warm tint overlay — orange glow at player center
+    const wr = Math.round(PLAYER_LIGHT_RADIUS * 0.6);
+    this.warmOverlay = scene.add.graphics();
+    this.warmOverlay.setDepth(91);
+    this.warmOverlay.setBlendMode(Phaser.BlendModes.ADD);
+
+    // Ground light spot — small orange circle at player feet
+    this.groundSpot = scene.add.graphics();
+    this.groundSpot.setDepth(5);
+    this.groundSpot.fillStyle(0xff8800, 0.1);
+    this.groundSpot.fillCircle(0, 0, 40);
   }
 
   update(playerX: number, playerY: number, torches: Torch[], delta: number): void {
@@ -85,11 +99,21 @@ export class FogOfWar {
     // Reset brush state
     this.torchBrush.setScale(1);
     this.torchBrush.setAlpha(1);
+
+    // Warm tint centered on player
+    this.warmOverlay.clear();
+    this.warmOverlay.fillStyle(0xff8800, 0.08);
+    this.warmOverlay.fillCircle(playerX, playerY, PLAYER_LIGHT_RADIUS * 0.5);
+
+    // Ground spot follows player
+    this.groundSpot.setPosition(playerX, playerY);
   }
 
   destroy(): void {
     this.rt.destroy();
     this.playerBrush.destroy();
     this.torchBrush.destroy();
+    this.warmOverlay.destroy();
+    this.groundSpot.destroy();
   }
 }
