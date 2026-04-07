@@ -140,10 +140,12 @@ export class GameScene extends Phaser.Scene {
         if (grid[gy][gx] === 0) {
           const tile = this.add.image(worldX, worldY, 'floor-tile');
           tile.setOrigin(0, 0);
+          tile.setTint(0x3a3228); // GOTHIC_COLORS.FLOOR_TINT
           floorGroup.add(tile);
         } else {
           const tile = this.wallGroup.create(worldX, worldY, 'wall-tile') as Phaser.Physics.Arcade.Image;
           tile.setOrigin(0, 0);
+          tile.setTint(0x2a2520); // GOTHIC_COLORS.WALL_TINT
           tile.refreshBody();
         }
       }
