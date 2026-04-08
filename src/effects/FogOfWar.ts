@@ -3,7 +3,7 @@ import type { Torch } from '../entities/Torch';
 
 const PLAYER_LIGHT_RADIUS = 180; // tighter, more oppressive
 const TORCH_LIGHT_RADIUS = 128;
-const FOG_ALPHA = 0.95;           // almost black outside light
+const FOG_ALPHA = 0.85;           // almost black outside light
 const FLICKER_SPEED = 0.005;
 
 export class FogOfWar {
@@ -24,25 +24,26 @@ export class FogOfWar {
     // Drawn at (r, r) so center aligns when positioned at (playerX - r, playerY - r)
     const r = PLAYER_LIGHT_RADIUS;
     this.playerBrush = scene.make.graphics({ x: 0, y: 0 });
-    // Outer step: erase 0.35 → remaining 0.60
-    this.playerBrush.fillStyle(0xffffff, 0.35);
-    this.playerBrush.fillCircle(r, r, r);
-    // Mid step: erase +0.35 → remaining 0.25
-    this.playerBrush.fillStyle(0xffffff, 0.35);
-    this.playerBrush.fillCircle(r, r, r * 0.6);
-    // Inner step: erase +0.25 → remaining ~0
-    this.playerBrush.fillStyle(0xffffff, 0.25);
-    this.playerBrush.fillCircle(r, r, r * 0.3);
+    const PLAYER_STEPS = 10;
+    for (let i = 0; i < PLAYER_STEPS; i++) {
+      const t = i / (PLAYER_STEPS - 1);
+      const stepRadius = r * (1 - t * 0.85);
+      const stepAlpha = 0.06 + t * 0.14;
+      this.playerBrush.fillStyle(0xffffff, stepAlpha);
+      this.playerBrush.fillCircle(r, r, stepRadius);
+    }
 
     // Pre-build torch light brush (smaller, same stepped approach)
     const tr = TORCH_LIGHT_RADIUS;
     this.torchBrush = scene.make.graphics({ x: 0, y: 0 });
-    this.torchBrush.fillStyle(0xffffff, 0.25);
-    this.torchBrush.fillCircle(tr, tr, tr);
-    this.torchBrush.fillStyle(0xffffff, 0.30);
-    this.torchBrush.fillCircle(tr, tr, tr * 0.6);
-    this.torchBrush.fillStyle(0xffffff, 0.30);
-    this.torchBrush.fillCircle(tr, tr, tr * 0.3);
+    const TORCH_STEPS = 8;
+    for (let i = 0; i < TORCH_STEPS; i++) {
+      const t = i / (TORCH_STEPS - 1);
+      const stepRadius = tr * (1 - t * 0.85);
+      const stepAlpha = 0.05 + t * 0.15;
+      this.torchBrush.fillStyle(0xffffff, stepAlpha);
+      this.torchBrush.fillCircle(tr, tr, stepRadius);
+    }
 
     // Warm tint overlay — orange glow at player center
     this.warmOverlay = scene.add.graphics();

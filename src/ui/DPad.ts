@@ -3,8 +3,8 @@ import Phaser from 'phaser';
 import { GOTHIC_COLORS } from './GothicTheme';
 import EventBus from '../systems/EventBus';
 
-const KEY_SIZE = 36;     // Gothic v2: enlarged for better mobile touch
-const CENTER_SIZE = 18;
+const KEY_SIZE = 50;     // Gothic v2: enlarged for better mobile touch
+const CENTER_SIZE = 24;
 const KEY_GAP = 2;
 
 type Direction = 'up' | 'down' | 'left' | 'right';
@@ -53,7 +53,7 @@ export class DPad {
     this.graphics.setDepth(20);
 
     // Define key rectangles (touch area slightly enlarged)
-    const touchPad = 4;
+    const touchPad = 6;
     this.keys = [
       { dir: 'up',    x: this.cx - KEY_SIZE / 2 - touchPad, y: this.cy - KEY_SIZE - KEY_GAP - KEY_SIZE + touchPad, w: KEY_SIZE + touchPad * 2, h: KEY_SIZE + touchPad * 2 },
       { dir: 'down',  x: this.cx - KEY_SIZE / 2 - touchPad, y: this.cy + KEY_GAP - touchPad, w: KEY_SIZE + touchPad * 2, h: KEY_SIZE + touchPad * 2 },
@@ -204,7 +204,7 @@ export class DPad {
     g.fillStyle(GOTHIC_COLORS.TEXT_PARCHMENT, 0.6);
     const acx = kx + KEY_SIZE / 2;
     const acy = ky + KEY_SIZE / 2;
-    const arrowSize = 5;
+    const arrowSize = 9;
     switch (dir) {
       case 'up':
         g.fillTriangle(acx, acy - arrowSize, acx - arrowSize, acy + arrowSize / 2, acx + arrowSize, acy + arrowSize / 2);

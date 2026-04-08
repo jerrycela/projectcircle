@@ -142,7 +142,7 @@ export class GameScene extends Phaser.Scene {
           const tile = this.add.image(worldX, worldY, 'floor-tile-v2');
           tile.setOrigin(0, 0);
           tile.setDisplaySize(tileSize, tileSize);
-          tile.setTint(0x3a3228);
+          tile.setTint(0x4a4238);
           tile.setDepth(0);
           floorGroup.add(tile);
         } else {
