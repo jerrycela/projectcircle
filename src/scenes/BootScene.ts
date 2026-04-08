@@ -28,7 +28,7 @@ export class BootScene extends Phaser.Scene {
   async create(): Promise<void> {
     // Wait for gothic font to load (3s timeout fallback to monospace)
     await Promise.race([
-      document.fonts.load('16px "Pirata One"'),
+      document.fonts.load('16px "Pirata One"').catch(() => {}),
       new Promise(resolve => setTimeout(resolve, 3000)),
     ]);
     this.scene.start('GameScene');
