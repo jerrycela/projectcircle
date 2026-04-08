@@ -1,6 +1,6 @@
 // src/ui/Globe.ts — Parameterized globe for HP/MP (P3 修正: merged into single class)
 import Phaser from 'phaser';
-import { GOTHIC_COLORS, drawStoneCircle } from './GothicTheme';
+import { GOTHIC_COLORS } from './GothicTheme';
 
 const GLOBE_RADIUS = 35; // P1 修正: 從 40 改為 35
 
@@ -13,6 +13,7 @@ export class Globe {
   private graphics: Phaser.GameObjects.Graphics;
   private liquidGraphics: Phaser.GameObjects.Graphics;
   private frameGraphics: Phaser.GameObjects.Graphics;
+  private frameImage: Phaser.GameObjects.Image;
   private mask: Phaser.Display.Masks.GeometryMask;
   private maskGraphics: Phaser.GameObjects.Graphics;
   private elapsed: number = 0;
@@ -42,10 +43,16 @@ export class Globe {
     this.mask = new Phaser.Display.Masks.GeometryMask(scene, this.maskGraphics);
     this.liquidGraphics.setMask(this.mask);
 
-    // Stone frame on top
+    // Inner shadow ring
     this.frameGraphics = scene.add.graphics();
     this.frameGraphics.setDepth(21);
-    drawStoneCircle(this.frameGraphics, x, y, GLOBE_RADIUS);
+    this.frameGraphics.lineStyle(2, 0x000000, 0.3);
+    this.frameGraphics.strokeCircle(x, y, GLOBE_RADIUS - 4);
+
+    // Stone frame image on top
+    this.frameImage = scene.add.image(x, y, 'globe-frame');
+    this.frameImage.setDisplaySize(GLOBE_RADIUS * 2 + 14, GLOBE_RADIUS * 2 + 14);
+    this.frameImage.setDepth(21);
   }
 
   update(current: number, max: number, delta: number): void {
@@ -108,5 +115,6 @@ export class Globe {
     this.liquidGraphics.destroy();
     this.maskGraphics.destroy();
     this.frameGraphics.destroy();
+    this.frameImage.destroy();
   }
 }

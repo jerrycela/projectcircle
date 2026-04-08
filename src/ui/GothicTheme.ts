@@ -31,16 +31,16 @@ export const GOTHIC_COLORS = {
 
 export const GOTHIC_FONTS = {
   BODY: {
-    fontFamily: 'monospace',
-    fontSize: '13px',
+    fontFamily: '"Pirata One", monospace',
+    fontSize: '14px',
     color: '#d4c4a0',
     stroke: '#000000',
     strokeThickness: 2,
   } as Phaser.Types.GameObjects.Text.TextStyle,
 
   TITLE: {
-    fontFamily: 'monospace',
-    fontSize: '18px',
+    fontFamily: '"Pirata One", monospace',
+    fontSize: '20px',
     color: '#d4c4a0',
     stroke: '#000000',
     strokeThickness: 3,
@@ -48,7 +48,7 @@ export const GOTHIC_FONTS = {
   } as Phaser.Types.GameObjects.Text.TextStyle,
 
   GOLD: {
-    fontFamily: 'monospace',
+    fontFamily: '"Pirata One", monospace',
     fontSize: '13px',
     color: '#c9a44a',
     stroke: '#000000',
@@ -56,7 +56,7 @@ export const GOTHIC_FONTS = {
   } as Phaser.Types.GameObjects.Text.TextStyle,
 
   DEATH: {
-    fontFamily: 'monospace',
+    fontFamily: '"Pirata One", monospace',
     fontSize: '24px',
     color: '#8b0000',
     stroke: '#000000',

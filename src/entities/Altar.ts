@@ -21,7 +21,7 @@ export class Altar extends Phaser.GameObjects.Image {
     this.promptText = scene.add.text(x, y - 40, 'Upgrade', {
       fontSize: '14px',
       color: '#ffffff',
-      fontFamily: 'monospace',
+      fontFamily: '"Pirata One", monospace',
       stroke: '#000000',
       strokeThickness: 2,
     });

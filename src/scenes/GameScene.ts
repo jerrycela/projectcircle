@@ -138,16 +138,64 @@ export class GameScene extends Phaser.Scene {
         const worldY = gy * tileSize;
 
         if (grid[gy][gx] === 0) {
-          const tile = this.add.image(worldX, worldY, 'floor-tile');
+          // Floor tile (upgraded texture)
+          const tile = this.add.image(worldX, worldY, 'floor-tile-v2');
           tile.setOrigin(0, 0);
-          tile.setTint(0x3a3228); // GOTHIC_COLORS.FLOOR_TINT
+          tile.setDisplaySize(tileSize, tileSize);
+          tile.setTint(0x3a3228);
+          tile.setDepth(0);
           floorGroup.add(tile);
         } else {
-          const tile = this.wallGroup.create(worldX, worldY, 'wall-tile') as Phaser.Physics.Arcade.Image;
+          // Wall top surface
+          const tile = this.wallGroup.create(worldX, worldY, 'wall-top') as Phaser.Physics.Arcade.Image;
           tile.setOrigin(0, 0);
-          tile.setTint(0x2a2520); // GOTHIC_COLORS.WALL_TINT
+          tile.setDisplaySize(tileSize, tileSize);
+          tile.setTint(0x2a2520);
+          tile.setDepth(2);
           tile.refreshBody();
+
+          // South-facing facade: only if cell below is floor
+          if (gy + 1 < GAME_CONFIG.MAP_HEIGHT && grid[gy + 1][gx] === 0) {
+            const facade = this.add.image(worldX, (gy + 1) * tileSize - 16, 'wall-face');
+            facade.setOrigin(0, 0);
+            facade.setDisplaySize(tileSize, 24);
+            facade.setDepth(4);
+
+            // Shadow strip on floor below facade
+            const shadow = this.add.rectangle(
+              worldX + tileSize / 2, (gy + 1) * tileSize + 8 + 6,
+              tileSize, 12, 0x000000, 0.35,
+            );
+            shadow.setDepth(1);
+          }
         }
+      }
+    }
+
+    // Scatter debris on floor tiles (5-10% density)
+    const debrisKeys = ['floor-debris-01', 'floor-debris-02'];
+    const rotations = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
+    for (let gy = 0; gy < GAME_CONFIG.MAP_HEIGHT; gy++) {
+      for (let gx = 0; gx < GAME_CONFIG.MAP_WIDTH; gx++) {
+        if (grid[gy][gx] !== 0) continue;
+        // Skip tiles with wall in 4-neighborhood
+        const hasWallNeighbor =
+          (gy > 0 && grid[gy - 1][gx] === 1) ||
+          (gy + 1 < GAME_CONFIG.MAP_HEIGHT && grid[gy + 1][gx] === 1) ||
+          (gx > 0 && grid[gy][gx - 1] === 1) ||
+          (gx + 1 < GAME_CONFIG.MAP_WIDTH && grid[gy][gx + 1] === 1);
+        if (hasWallNeighbor) continue;
+        if (Math.random() > 0.08) continue;
+
+        const key = debrisKeys[Math.floor(Math.random() * debrisKeys.length)];
+        const debris = this.add.image(
+          gx * tileSize + tileSize / 2,
+          gy * tileSize + tileSize / 2,
+          key,
+        );
+        debris.setDepth(0.5);
+        debris.setAlpha(0.6);
+        debris.setRotation(rotations[Math.floor(Math.random() * rotations.length)]);
       }
     }
 
@@ -360,15 +408,26 @@ export class GameScene extends Phaser.Scene {
     const vigH = GAME_CONFIG.GAME_HEIGHT;
     const vigCanvas = this.textures.createCanvas('vignette-tex', vigW, vigH)!;
     const vigCtx = vigCanvas.getContext();
-    const grad = vigCtx.createRadialGradient(vigW / 2, vigH / 2, vigH * 0.25, vigW / 2, vigH / 2, vigH * 0.65);
+    const grad = vigCtx.createRadialGradient(vigW / 2, vigH / 2, vigH * 0.20, vigW / 2, vigH / 2, vigH * 0.55);
     grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.65)');
     vigCtx.fillStyle = grad;
     vigCtx.fillRect(0, 0, vigW, vigH);
     vigCanvas.refresh();
     const vigImg = this.add.image(vigW / 2, vigH / 2, 'vignette-tex');
     vigImg.setScrollFactor(0);
     vigImg.setDepth(91);
+
+    // --- Atmosphere: Warm color filter (sepia/tarnished gold) ---
+    const warmFilter = this.add.rectangle(vigW / 2, vigH / 2, vigW, vigH, 0xaa7744, 0.06);
+    warmFilter.setScrollFactor(0);
+    warmFilter.setDepth(91.5);
+    if (this.game.renderer.type === Phaser.CANVAS) {
+      warmFilter.setBlendMode(Phaser.BlendModes.NORMAL);
+      warmFilter.setAlpha(0.04);
+    } else {
+      warmFilter.setBlendMode(Phaser.BlendModes.MULTIPLY);
+    }
 
     // --- Atmosphere: Static noise overlay (CRT grain) ---
     const noiseSize = 128;

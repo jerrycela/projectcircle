@@ -7,7 +7,9 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     const assets = [
-      'floor-tile', 'wall-tile',
+      'floor-tile', 'floor-tile-v2', 'wall-tile', 'wall-top', 'wall-face',
+      'floor-debris-01', 'floor-debris-02',
+      'globe-frame', 'skill-frame', 'hud-bg', 'card-bg',
       'player-body', 'player-weapon',
       'weapon-axe', 'weapon-sword', 'weapon-hammer',
       'enemy-spider', 'enemy-goblin', 'enemy-bat',
@@ -23,7 +25,12 @@ export class BootScene extends Phaser.Scene {
     }
   }
 
-  create(): void {
+  async create(): Promise<void> {
+    // Wait for gothic font to load (3s timeout fallback to monospace)
+    await Promise.race([
+      document.fonts.load('16px "Pirata One"'),
+      new Promise(resolve => setTimeout(resolve, 3000)),
+    ]);
     this.scene.start('GameScene');
     this.scene.launch('UIScene');
   }

@@ -45,7 +45,6 @@ export class FogOfWar {
     this.torchBrush.fillCircle(tr, tr, tr * 0.3);
 
     // Warm tint overlay — orange glow at player center
-    const wr = Math.round(PLAYER_LIGHT_RADIUS * 0.6);
     this.warmOverlay = scene.add.graphics();
     this.warmOverlay.setDepth(91);
     this.warmOverlay.setBlendMode(Phaser.BlendModes.ADD);
@@ -100,10 +99,16 @@ export class FogOfWar {
     this.torchBrush.setScale(1);
     this.torchBrush.setAlpha(1);
 
-    // Warm tint centered on player
+    // Warm tint centered on player (enhanced radius + alpha)
     this.warmOverlay.clear();
-    this.warmOverlay.fillStyle(0xff8800, 0.08);
-    this.warmOverlay.fillCircle(playerX, playerY, PLAYER_LIGHT_RADIUS * 0.5);
+    this.warmOverlay.fillStyle(0xff8800, 0.12);
+    this.warmOverlay.fillCircle(playerX, playerY, PLAYER_LIGHT_RADIUS * 0.65);
+
+    // Torch warm orange glow
+    for (const torch of torches) {
+      this.warmOverlay.fillStyle(0xff6622, 0.06);
+      this.warmOverlay.fillCircle(torch.x, torch.y, TORCH_LIGHT_RADIUS * 0.4);
+    }
 
     // Ground spot follows player
     this.groundSpot.setPosition(playerX, playerY);

@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { GOTHIC_COLORS } from './GothicTheme';
 import EventBus from '../systems/EventBus';
 
-const KEY_SIZE = 32;     // P1 修正: 從 36 改為 32
+const KEY_SIZE = 36;     // Gothic v2: enlarged for better mobile touch
 const CENTER_SIZE = 18;
 const KEY_GAP = 2;
 

@@ -449,7 +449,7 @@ export const EQUIPMENT_RARITY_DEFS: Record<EquipmentRarity, {
   label: string;
 }> = {
   white:  { affixCount: 1,              valueMult: 1.0, dropWeight: 0.60, color: 0xffffff, label: 'Common' },
-  green:  { affixCount: { min: 1, max: 2 }, valueMult: 1.3, dropWeight: 0.25, color: 0x00ff00, label: 'Uncommon' },
+  green:  { affixCount: { min: 1, max: 2 }, valueMult: 1.3, dropWeight: 0.25, color: 0x7a9a5a, label: 'Uncommon' },
   blue:   { affixCount: 2,              valueMult: 1.6, dropWeight: 0.12, color: 0x3399ff, label: 'Rare' },
   purple: { affixCount: 3,              valueMult: 1.9, dropWeight: 0.03, color: 0x9933ff, label: 'Epic' },
 };

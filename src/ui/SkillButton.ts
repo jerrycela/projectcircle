@@ -2,11 +2,10 @@ import Phaser from 'phaser';
 import { SKILL_DEFS } from '../config';
 import EventBus from '../systems/EventBus';
 import type { SkillSlotState } from '../systems/SkillManager';
-import { GOTHIC_COLORS, drawStoneCircle } from './GothicTheme';
+import { GOTHIC_COLORS } from './GothicTheme';
 
-const VISUAL_RADIUS = 25;   // 50px diameter visual
-const TOUCH_RADIUS = 30;    // 60px hit zone
-const PRESSED_RADIUS = 22;  // P2 修正: redraw smaller instead of setScale
+const VISUAL_SIZE = 50;    // 50x50 visual area
+const TOUCH_SIZE = 60;     // 60x60 hit zone
 
 export class SkillButton {
   private scene: Phaser.Scene;
@@ -18,6 +17,7 @@ export class SkillButton {
   private bgGraphics: Phaser.GameObjects.Graphics;
   private iconGraphics: Phaser.GameObjects.Graphics;
   private overlayGraphics: Phaser.GameObjects.Graphics;
+  private frameImage: Phaser.GameObjects.Image;
 
   // Text labels
   private plusText: Phaser.GameObjects.Text;
@@ -50,26 +50,31 @@ export class SkillButton {
     this.overlayGraphics = scene.add.graphics();
     this.overlayGraphics.setDepth(22);
 
+    // Stone frame image
+    this.frameImage = scene.add.image(x, y, 'skill-frame');
+    this.frameImage.setDisplaySize(TOUCH_SIZE, TOUCH_SIZE);
+    this.frameImage.setDepth(21);
+
     this.plusText = scene.add.text(x, y, '+', {
       fontSize: '20px',
       color: '#d4c4a0',
-      fontFamily: 'monospace',
+      fontFamily: '"Pirata One", monospace',
     });
     this.plusText.setOrigin(0.5, 0.5);
     this.plusText.setDepth(23);
     this.plusText.setAlpha(0.6);
 
-    this.mpText = scene.add.text(x, y + VISUAL_RADIUS + 8, '', {
+    this.mpText = scene.add.text(x, y + VISUAL_SIZE / 2 + 8, '', {
       fontSize: '10px',
       color: '#d4c4a0',
-      fontFamily: 'monospace',
+      fontFamily: '"Pirata One", monospace',
     });
     this.mpText.setOrigin(0.5, 0.5);
     this.mpText.setDepth(23);
     this.mpText.setVisible(false);
 
     // Interactive hit zone
-    this.hitZone = scene.add.zone(x, y, TOUCH_RADIUS * 2, TOUCH_RADIUS * 2);
+    this.hitZone = scene.add.zone(x, y, TOUCH_SIZE, TOUCH_SIZE);
     this.hitZone.setDepth(24);
     this.hitZone.setInteractive({ useHandCursor: false });
 
@@ -116,27 +121,30 @@ export class SkillButton {
   }
 
   private drawEmpty(): void {
+    const half = VISUAL_SIZE / 2;
     this.bgGraphics.fillStyle(GOTHIC_COLORS.STONE_DARK, 0.4);
-    this.bgGraphics.fillCircle(this.x, this.y, VISUAL_RADIUS);
-    drawStoneCircle(this.bgGraphics, this.x, this.y, VISUAL_RADIUS);
+    this.bgGraphics.fillRect(this.x - half, this.y - half, VISUAL_SIZE, VISUAL_SIZE);
 
     this.plusText.setVisible(true);
     this.plusText.setAlpha(0.4);
     this.mpText.setVisible(false);
+    this.frameImage.setScale(1);
   }
 
   private drawReady(): void {
     const alpha = this.currentMpEnough ? 1.0 : 0.5;
-    // P2 修正: press feedback via smaller radius, not setScale
-    const r = this.isPressed ? PRESSED_RADIUS : VISUAL_RADIUS;
+    const half = VISUAL_SIZE / 2;
+
+    // Press feedback via setScale
+    const scale = this.isPressed ? (VISUAL_SIZE - 6) / VISUAL_SIZE : 1;
+    this.frameImage.setScale(scale);
 
     this.bgGraphics.fillStyle(GOTHIC_COLORS.STONE_SURFACE, alpha);
-    this.bgGraphics.fillCircle(this.x, this.y, r);
-    drawStoneCircle(this.bgGraphics, this.x, this.y, r);
+    this.bgGraphics.fillRect(this.x - half, this.y - half, VISUAL_SIZE, VISUAL_SIZE);
 
     if (!this.currentMpEnough) {
       this.bgGraphics.lineStyle(2, GOTHIC_COLORS.TEXT_BLOOD, 0.8);
-      this.bgGraphics.strokeCircle(this.x, this.y, r + 1);
+      this.bgGraphics.strokeRect(this.x - half - 1, this.y - half - 1, VISUAL_SIZE + 2, VISUAL_SIZE + 2);
     }
 
     this.plusText.setVisible(false);
@@ -154,34 +162,30 @@ export class SkillButton {
   }
 
   private drawCasting(): void {
+    const half = VISUAL_SIZE / 2;
     this.bgGraphics.fillStyle(GOTHIC_COLORS.STONE_DARK, 0.4);
-    this.bgGraphics.fillCircle(this.x, this.y, VISUAL_RADIUS);
-    drawStoneCircle(this.bgGraphics, this.x, this.y, VISUAL_RADIUS);
+    this.bgGraphics.fillRect(this.x - half, this.y - half, VISUAL_SIZE, VISUAL_SIZE);
 
     this.plusText.setVisible(false);
     this.drawSkillIcon(0.4);
     this.mpText.setVisible(false);
+    this.frameImage.setScale(1);
   }
 
   private drawCooldown(): void {
+    const half = VISUAL_SIZE / 2;
     this.bgGraphics.fillStyle(GOTHIC_COLORS.STONE_SURFACE, 1.0);
-    this.bgGraphics.fillCircle(this.x, this.y, VISUAL_RADIUS);
-    drawStoneCircle(this.bgGraphics, this.x, this.y, VISUAL_RADIUS);
+    this.bgGraphics.fillRect(this.x - half, this.y - half, VISUAL_SIZE, VISUAL_SIZE);
 
     this.plusText.setVisible(false);
     this.drawSkillIcon(0.6);
+    this.frameImage.setScale(1);
 
-    // Clockwise dark arc overlay — ratio 1.0 = full cooldown (just cast), 0.0 = ready
+    // Top-to-bottom rect fill cooldown overlay
     if (this.currentCooldownRatio > 0) {
-      const startAngle = -Math.PI / 2; // top
-      const endAngle = startAngle + this.currentCooldownRatio * Math.PI * 2;
-
-      this.overlayGraphics.fillStyle(0x2a1a0a, 0.7); // dark brown
-      this.overlayGraphics.beginPath();
-      this.overlayGraphics.moveTo(this.x, this.y);
-      this.overlayGraphics.arc(this.x, this.y, VISUAL_RADIUS, startAngle, endAngle, false);
-      this.overlayGraphics.closePath();
-      this.overlayGraphics.fillPath();
+      const fillH = VISUAL_SIZE * this.currentCooldownRatio;
+      this.overlayGraphics.fillStyle(0x2a1a0a, 0.7);
+      this.overlayGraphics.fillRect(this.x - half, this.y - half, VISUAL_SIZE, fillH);
     }
 
     this.mpText.setVisible(false);
@@ -290,6 +294,7 @@ export class SkillButton {
         this.bgGraphics.setPosition(nx - origX, 0);
         this.iconGraphics.setPosition(nx - origX, 0);
         this.overlayGraphics.setPosition(nx - origX, 0);
+        this.frameImage.setX(nx);
         this.plusText.setX(nx);
         this.mpText.setX(nx);
       },
@@ -297,6 +302,7 @@ export class SkillButton {
         this.bgGraphics.setPosition(0, 0);
         this.iconGraphics.setPosition(0, 0);
         this.overlayGraphics.setPosition(0, 0);
+        this.frameImage.setX(origX);
         this.plusText.setX(origX);
         this.mpText.setX(origX);
       },
@@ -307,6 +313,7 @@ export class SkillButton {
     this.bgGraphics.destroy();
     this.iconGraphics.destroy();
     this.overlayGraphics.destroy();
+    this.frameImage.destroy();
     this.plusText.destroy();
     this.mpText.destroy();
     this.hitZone.destroy();

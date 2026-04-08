@@ -301,7 +301,7 @@ export class SkillManager {
     const text = this.scene.add.text(x, y - 10, String(damage), {
       fontSize: '18px',
       color: '#00ffff',
-      fontFamily: 'monospace',
+      fontFamily: '"Pirata One", monospace',
       stroke: '#000000',
       strokeThickness: 2,
     });

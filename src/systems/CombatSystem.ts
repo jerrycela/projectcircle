@@ -183,7 +183,7 @@ export class CombatSystem {
     const text = this.scene.add.text(x, y - 10, String(damage), {
       fontSize,
       color,
-      fontFamily: 'monospace',
+      fontFamily: '"Pirata One", monospace',
       stroke: '#000000',
       strokeThickness: 2,
     });

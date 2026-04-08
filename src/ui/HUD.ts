@@ -34,6 +34,12 @@ export class HUD {
     this.scene = scene;
     const camW = scene.cameras.main.width;
 
+    // HUD background stone slab
+    const hudBg = scene.add.image(225, 700, 'hud-bg');
+    hudBg.setDisplaySize(450, 200);
+    hudBg.setDepth(19);
+    hudBg.setScrollFactor(0);
+
     // --- Bottom globes (P1 修正: y=665, r=35) ---
     this.healthGlobe = new Globe(
       scene, 50, 665,

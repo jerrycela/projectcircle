@@ -83,8 +83,14 @@ export class InitialSkillPanel {
   private createSkillCard(cx: number, cy: number, w: number, h: number, skillKey: string): void {
     const def = SKILL_DEFS[skillKey];
 
+    // Card background image
+    const cardBgImg = this.scene.add.image(cx, cy, 'card-bg');
+    cardBgImg.setDisplaySize(w, h);
+    this.container.add(cardBgImg);
+
+    // Stone frame overlay
     const cardGfx = this.scene.add.graphics();
-    drawGothicPanel(cardGfx, cx - w / 2, cy - h / 2, w, h);
+    drawStoneFrame(cardGfx, cx - w / 2, cy - h / 2, w, h);
     this.container.add(cardGfx);
 
     const cardBg = this.scene.add.rectangle(cx, cy, w, h, 0x000000, 0);
@@ -94,9 +100,9 @@ export class InitialSkillPanel {
 
     // Category badge
     const categoryLabel = def.category === 'magic' ? 'MAGIC' : 'PHYSICAL';
-    const categoryColor = def.category === 'magic' ? '#4488ff' : '#ff8844';
+    const categoryColor = def.category === 'magic' ? '#6688cc' : '#cc7744';
     const badge = this.scene.add.text(cx + w / 2 - 12, cy - h / 2 + 8, categoryLabel, {
-      fontSize: '10px', color: categoryColor, fontFamily: 'monospace',
+      fontSize: '10px', color: categoryColor, fontFamily: '"Pirata One", monospace',
     });
     badge.setOrigin(1, 0);
     this.container.add(badge);
@@ -131,7 +137,7 @@ export class InitialSkillPanel {
       };
       const elemName = elemNames[def.fixedElement] ?? def.fixedElement;
       const elemText = this.scene.add.text(cx - w / 2 + 20, cy + 36, elemName, {
-        fontSize: '11px', color: elemColors[def.fixedElement] ?? '#aaaaaa', fontFamily: 'monospace',
+        fontSize: '11px', color: elemColors[def.fixedElement] ?? '#aaaaaa', fontFamily: '"Pirata One", monospace',
       });
       this.container.add(elemText);
     }
