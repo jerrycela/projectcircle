@@ -24,23 +24,24 @@ export class FogOfWar {
     // Drawn at (r, r) so center aligns when positioned at (playerX - r, playerY - r)
     const r = PLAYER_LIGHT_RADIUS;
     this.playerBrush = scene.make.graphics({ x: 0, y: 0 });
-    const PLAYER_STEPS = 10;
+    // 16-step smooth gradient: low alpha per step, cumulative erase
+    const PLAYER_STEPS = 16;
     for (let i = 0; i < PLAYER_STEPS; i++) {
       const t = i / (PLAYER_STEPS - 1);
-      const stepRadius = r * (1 - t * 0.85);
-      const stepAlpha = 0.06 + t * 0.14;
+      const stepRadius = r * (1 - t * 0.9);  // r → r*0.1
+      const stepAlpha = 0.03 + t * 0.10;     // 0.03 → 0.13
       this.playerBrush.fillStyle(0xffffff, stepAlpha);
       this.playerBrush.fillCircle(r, r, stepRadius);
     }
 
-    // Pre-build torch light brush (smaller, same stepped approach)
+    // Pre-build torch light brush (12-step)
     const tr = TORCH_LIGHT_RADIUS;
     this.torchBrush = scene.make.graphics({ x: 0, y: 0 });
-    const TORCH_STEPS = 8;
+    const TORCH_STEPS = 12;
     for (let i = 0; i < TORCH_STEPS; i++) {
       const t = i / (TORCH_STEPS - 1);
-      const stepRadius = tr * (1 - t * 0.85);
-      const stepAlpha = 0.05 + t * 0.15;
+      const stepRadius = tr * (1 - t * 0.9);
+      const stepAlpha = 0.03 + t * 0.12;
       this.torchBrush.fillStyle(0xffffff, stepAlpha);
       this.torchBrush.fillCircle(tr, tr, stepRadius);
     }

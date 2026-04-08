@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { SKILL_DEFS } from '../config';
 import EventBus from '../systems/EventBus';
 import type { SkillSlotState } from '../systems/SkillManager';
-import { GOTHIC_COLORS } from './GothicTheme';
+import { GOTHIC_COLORS, drawStoneFrame } from './GothicTheme';
 
 const VISUAL_SIZE = 50;    // 50x50 visual area
 const TOUCH_SIZE = 60;     // 60x60 hit zone
@@ -17,7 +17,7 @@ export class SkillButton {
   private bgGraphics: Phaser.GameObjects.Graphics;
   private iconGraphics: Phaser.GameObjects.Graphics;
   private overlayGraphics: Phaser.GameObjects.Graphics;
-  private frameImage: Phaser.GameObjects.Image;
+  private frameGraphics: Phaser.GameObjects.Graphics;
 
   // Text labels
   private plusText: Phaser.GameObjects.Text;
@@ -50,10 +50,11 @@ export class SkillButton {
     this.overlayGraphics = scene.add.graphics();
     this.overlayGraphics.setDepth(22);
 
-    // Stone frame image
-    this.frameImage = scene.add.image(x, y, 'skill-frame');
-    this.frameImage.setDisplaySize(TOUCH_SIZE, TOUCH_SIZE);
-    this.frameImage.setDepth(21);
+    // Stone frame (programmatic, no PNG)
+    this.frameGraphics = scene.add.graphics();
+    this.frameGraphics.setDepth(21);
+    const half = TOUCH_SIZE / 2;
+    drawStoneFrame(this.frameGraphics, x - half, y - half, TOUCH_SIZE, TOUCH_SIZE);
 
     this.plusText = scene.add.text(x, y, '+', {
       fontSize: '20px',
@@ -128,7 +129,7 @@ export class SkillButton {
     this.plusText.setVisible(true);
     this.plusText.setAlpha(0.4);
     this.mpText.setVisible(false);
-    this.frameImage.setScale(1);
+    this.frameGraphics.setScale(1);
   }
 
   private drawReady(): void {
@@ -137,7 +138,7 @@ export class SkillButton {
 
     // Press feedback via setScale
     const scale = this.isPressed ? (VISUAL_SIZE - 6) / VISUAL_SIZE : 1;
-    this.frameImage.setScale(scale);
+    this.frameGraphics.setScale(scale);
 
     this.bgGraphics.fillStyle(GOTHIC_COLORS.STONE_SURFACE, alpha);
     this.bgGraphics.fillRect(this.x - half, this.y - half, VISUAL_SIZE, VISUAL_SIZE);
@@ -169,7 +170,7 @@ export class SkillButton {
     this.plusText.setVisible(false);
     this.drawSkillIcon(0.4);
     this.mpText.setVisible(false);
-    this.frameImage.setScale(1);
+    this.frameGraphics.setScale(1);
   }
 
   private drawCooldown(): void {
@@ -179,7 +180,7 @@ export class SkillButton {
 
     this.plusText.setVisible(false);
     this.drawSkillIcon(0.6);
-    this.frameImage.setScale(1);
+    this.frameGraphics.setScale(1);
 
     // Top-to-bottom rect fill cooldown overlay
     if (this.currentCooldownRatio > 0) {
@@ -294,7 +295,7 @@ export class SkillButton {
         this.bgGraphics.setPosition(nx - origX, 0);
         this.iconGraphics.setPosition(nx - origX, 0);
         this.overlayGraphics.setPosition(nx - origX, 0);
-        this.frameImage.setX(nx);
+        this.frameGraphics.setX(nx - origX);
         this.plusText.setX(nx);
         this.mpText.setX(nx);
       },
@@ -302,7 +303,7 @@ export class SkillButton {
         this.bgGraphics.setPosition(0, 0);
         this.iconGraphics.setPosition(0, 0);
         this.overlayGraphics.setPosition(0, 0);
-        this.frameImage.setX(origX);
+        this.frameGraphics.setX(0);
         this.plusText.setX(origX);
         this.mpText.setX(origX);
       },
@@ -313,7 +314,7 @@ export class SkillButton {
     this.bgGraphics.destroy();
     this.iconGraphics.destroy();
     this.overlayGraphics.destroy();
-    this.frameImage.destroy();
+    this.frameGraphics.destroy();
     this.plusText.destroy();
     this.mpText.destroy();
     this.hitZone.destroy();

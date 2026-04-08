@@ -34,11 +34,18 @@ export class HUD {
     this.scene = scene;
     const camW = scene.cameras.main.width;
 
-    // HUD background stone slab
-    const hudBg = scene.add.image(225, 700, 'hud-bg');
-    hudBg.setDisplaySize(450, 200);
+    // HUD background: clean dark panel (replaces broken hud-bg.png transparency)
+    const hudBg = scene.add.graphics();
     hudBg.setDepth(19);
-    hudBg.setScrollFactor(0);
+    // Gradient-like effect: darker at bottom, slightly lighter at top
+    hudBg.fillStyle(0x111111, 0.88);
+    hudBg.fillRect(0, 600, 450, 200);
+    // Top border line
+    hudBg.lineStyle(2, 0x2a2520);
+    hudBg.beginPath();
+    hudBg.moveTo(0, 600);
+    hudBg.lineTo(450, 600);
+    hudBg.strokePath();
 
     // --- Bottom globes (P1 修正: y=665, r=35) ---
     this.healthGlobe = new Globe(
